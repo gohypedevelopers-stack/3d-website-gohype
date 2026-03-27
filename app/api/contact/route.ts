@@ -7,6 +7,12 @@ import { Resend } from 'resend'
 export const runtime = 'nodejs'
 
 const CONTACT_RECIPIENTS = process.env.CONTACT_RECIPIENTS || 'gourav.moksh@gmail.com'
+const SMTP_HOST = process.env.SMTP_HOST || ''
+const SMTP_PORT = parsePositiveInteger(process.env.SMTP_PORT, 465)
+const SMTP_SECURE = (process.env.SMTP_SECURE || 'true') === 'true'
+const SMTP_USER = process.env.SMTP_USER || ''
+const SMTP_PASS = process.env.SMTP_PASS || ''
+const SMTP_FROM_EMAIL = process.env.SMTP_FROM_EMAIL || ''
 const GMAIL_USER = process.env.GMAIL_USER || ''
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || ''
 const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
@@ -17,7 +23,7 @@ const GOOGLE_CALENDAR_CLIENT_ID = process.env.GOOGLE_CALENDAR_CLIENT_ID || ''
 const GOOGLE_CALENDAR_CLIENT_SECRET = process.env.GOOGLE_CALENDAR_CLIENT_SECRET || ''
 const GOOGLE_CALENDAR_REFRESH_TOKEN = process.env.GOOGLE_CALENDAR_REFRESH_TOKEN || ''
 const GOOGLE_CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || 'primary'
-const GOOGLE_CALENDAR_ORGANIZER_EMAIL = process.env.GOOGLE_CALENDAR_ORGANIZER_EMAIL || GMAIL_USER
+const GOOGLE_CALENDAR_ORGANIZER_EMAIL = process.env.GOOGLE_CALENDAR_ORGANIZER_EMAIL || SMTP_USER || GMAIL_USER
 const BOOKING_DURATION_MINUTES = parsePositiveInteger(process.env.BOOKING_DURATION_MINUTES, 30)
 const INDIA_TIME_ZONE = 'Asia/Kolkata'
 
@@ -249,10 +255,35 @@ export async function POST(req: Request) {
 }
 
 function hasMailProvider() {
-    return Boolean(RESEND_API_KEY || (GMAIL_USER && GMAIL_APP_PASSWORD))
+    return Boolean((SMTP_HOST && SMTP_USER && SMTP_PASS) || RESEND_API_KEY || (GMAIL_USER && GMAIL_APP_PASSWORD))
 }
 
 function createMailProvider(): MailProvider {
+    if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
+        const transporter = nodemailer.createTransport({
+            host: SMTP_HOST,
+            port: SMTP_PORT,
+            secure: SMTP_SECURE,
+            auth: {
+                user: SMTP_USER,
+                pass: SMTP_PASS,
+            },
+        })
+
+        return {
+            async send({ to, subject, text, html, replyTo, from }) {
+                await transporter.sendMail({
+                    from: from || defaultFromAddress('GoHype Media'),
+                    to,
+                    replyTo,
+                    subject,
+                    text,
+                    html,
+                })
+            },
+        }
+    }
+
     if (RESEND_API_KEY) {
         const resend = new Resend(RESEND_API_KEY)
 
@@ -297,6 +328,11 @@ function createMailProvider(): MailProvider {
 }
 
 function defaultFromAddress(label: string) {
+    if (SMTP_FROM_EMAIL || SMTP_USER) {
+        const email = extractEmailAddress(SMTP_FROM_EMAIL || SMTP_USER)
+        return `${label} <${email}>`
+    }
+
     if (RESEND_API_KEY) {
         const email = extractEmailAddress(RESEND_FROM_EMAIL)
         return `${label} <${email}>`
