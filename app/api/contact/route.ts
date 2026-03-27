@@ -85,6 +85,19 @@ export async function POST(req: Request) {
     const meetingStart = extractMeetingDate(body)
     const normalizedRecipients = normalizeEmailList(CONTACT_RECIPIENTS.split(','))
 
+    console.log('contact: request received', {
+        name: String(name || '').trim(),
+        email: String(email || '').trim(),
+        source: leadFields.source || '',
+        hasMeetingStart: Boolean(meetingStart),
+        recipients: normalizedRecipients,
+        smtpHost: SMTP_HOST,
+        smtpPort: SMTP_PORT,
+        smtpSecure: SMTP_SECURE,
+        smtpUser: SMTP_USER,
+        smtpFromEmail: SMTP_FROM_EMAIL,
+    })
+
     if (!name.trim() || !email.trim()) {
         return NextResponse.json({ error: 'Name and email are required.' }, { status: 400 })
     }
@@ -103,6 +116,15 @@ export async function POST(req: Request) {
     const timeContext = buildTimeContext(body, req, leadFields.meetingLabel)
     const mailProvider = createMailProvider()
     const isCalendarBooking = Boolean(meetingStart || leadFields.source === 'calendar' || leadFields.meetingLabel)
+
+    console.log('contact: booking mode evaluation', {
+        isCalendarBooking,
+        googleCalendarEnabled: GOOGLE_CALENDAR_ENABLED,
+        hasGoogleMeetLink: Boolean(GOOGLE_MEET_LINK.trim()),
+        requesterTimeZone: timeContext.requesterTimeZone,
+        meetingLocalTime: timeContext.meetingLocalTime,
+        meetingIndiaTime: timeContext.meetingIndiaTime,
+    })
 
     if (isCalendarBooking) {
         if (!meetingStart) {
@@ -126,8 +148,9 @@ export async function POST(req: Request) {
                     meetingStart,
                     meetingEnd,
                 })
+                console.log('contact: calendar booking created', bookingLinks)
             } catch (error: any) {
-                console.error('contact: calendar booking failed', error)
+                console.error('contact: calendar booking failed', serializeError(error))
 
                 bookingMode = 'email'
                 bookingLinks = {
@@ -144,6 +167,10 @@ export async function POST(req: Request) {
                 calendarUrl: '',
             }
         } else {
+            console.error('contact: booking configuration missing', {
+                googleCalendarEnabled: GOOGLE_CALENDAR_ENABLED,
+                hasGoogleMeetLink: Boolean(GOOGLE_MEET_LINK.trim()),
+            })
             return NextResponse.json(
                 {
                     error:
@@ -152,6 +179,11 @@ export async function POST(req: Request) {
                 { status: 500 },
             )
         }
+
+        console.log('contact: booking prepared', {
+            bookingMode,
+            bookingLinks,
+        })
 
         const teamEmail = {
             name: name.trim(),
@@ -165,10 +197,21 @@ export async function POST(req: Request) {
         }
 
         try {
+            console.log('contact: sending team notification', {
+                to: normalizedRecipients,
+                subject: `New GoHype booking from ${name.trim()}`,
+            })
             await sendTeamNotificationEmail(mailProvider, normalizedRecipients, {
                 ...teamEmail,
             })
+            console.log('contact: team notification sent', {
+                to: normalizedRecipients,
+            })
 
+            console.log('contact: sending client confirmation', {
+                to: email.trim(),
+                subject: `Your ${leadFields.meetingType || 'Strategy Call'} with GoHype is confirmed`,
+            })
             await sendRequesterConfirmationEmail(mailProvider, {
                 name: name.trim(),
                 email: email.trim(),
@@ -178,8 +221,11 @@ export async function POST(req: Request) {
                 timeContext,
                 bookingLinks,
             })
+            console.log('contact: client confirmation sent', {
+                to: email.trim(),
+            })
         } catch (error: any) {
-            console.error('contact: post-booking email failed', error)
+            console.error('contact: post-booking email failed', serializeError(error))
             return NextResponse.json(
                 {
                     error: error?.message || 'Booking was saved, but the confirmation email could not be delivered.',
@@ -226,6 +272,10 @@ export async function POST(req: Request) {
     })
 
     try {
+        console.log('contact: sending website inquiry', {
+            to: normalizedRecipients,
+            subject: `New GoHype inquiry from ${name.trim()}`,
+        })
         await mailProvider.send({
             from: defaultFromAddress('GoHype Inquiry'),
             to: normalizedRecipients,
@@ -233,6 +283,9 @@ export async function POST(req: Request) {
             subject: `New GoHype inquiry from ${name.trim()}`,
             text,
             html,
+        })
+        console.log('contact: website inquiry sent', {
+            to: normalizedRecipients,
         })
 
         return NextResponse.json(
@@ -245,7 +298,7 @@ export async function POST(req: Request) {
             { status: 200 },
         )
     } catch (error: any) {
-        console.error('contact: unexpected error', error)
+        console.error('contact: unexpected error', serializeError(error))
         return NextResponse.json({ error: error?.message || 'Failed to send email.' }, { status: 500 })
     }
 }
@@ -274,13 +327,30 @@ function createMailProvider(): MailProvider {
 
     return {
         async send({ to, subject, text, html, replyTo, from }) {
-            await transporter.sendMail({
+            console.log('contact: smtp send start', {
+                from: from || defaultFromAddress('GoHype Media'),
+                to,
+                replyTo: replyTo || '',
+                subject,
+            })
+
+            const info = await transporter.sendMail({
                 from: from || defaultFromAddress('GoHype Media'),
                 to,
                 replyTo,
                 subject,
                 text,
                 html,
+            })
+
+            console.log('contact: smtp send success', {
+                from: from || defaultFromAddress('GoHype Media'),
+                to,
+                subject,
+                messageId: info.messageId,
+                accepted: info.accepted,
+                rejected: info.rejected,
+                response: info.response,
             })
         },
     }
@@ -294,6 +364,18 @@ function defaultFromAddress(label: string) {
 function extractEmailAddress(value: string) {
     const match = /<([^>]+)>/.exec(value)
     return match?.[1]?.trim() || value.trim()
+}
+
+function serializeError(error: any) {
+    return {
+        message: error?.message || '',
+        code: error?.code || '',
+        command: error?.command || '',
+        response: error?.response || '',
+        responseCode: error?.responseCode || '',
+        rejected: error?.rejected || [],
+        stack: error?.stack || '',
+    }
 }
 
 async function createCalendarBooking({

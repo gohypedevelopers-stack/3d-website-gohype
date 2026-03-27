@@ -121,12 +121,29 @@ export default function ContactCalendar({ prefill }: Props) {
                 data = await res.json()
             } else {
                 const text = await res.text()
+                console.error("contact-calendar: non-json response", {
+                    status: res.status,
+                    statusText: res.statusText,
+                    body: text,
+                })
                 throw new Error(
                     `Request failed (${res.status}). ${text.slice(0, 140) || "Unexpected response from server."}`,
                 )
             }
 
-            if (!res.ok) throw new Error(data?.error || `Failed to submit (${res.status})`)
+            console.log("contact-calendar: api response", {
+                ok: res.ok,
+                status: res.status,
+                data,
+            })
+
+            if (!res.ok) {
+                console.error("contact-calendar: api error", {
+                    status: res.status,
+                    data,
+                })
+                throw new Error(data?.error || `Failed to submit (${res.status})`)
+            }
 
             setBookingResponse({
                 calendarUrl: data?.calendarUrl || "",
@@ -134,8 +151,18 @@ export default function ContactCalendar({ prefill }: Props) {
                 inviteSent: Boolean(data?.inviteSent),
                 deliveryMode: data?.deliveryMode === "calendar" ? "calendar" : "email",
             })
+            console.log("contact-calendar: booking success", {
+                calendarUrl: data?.calendarUrl || "",
+                meetingUrl: data?.meetingUrl || "",
+                inviteSent: Boolean(data?.inviteSent),
+                deliveryMode: data?.deliveryMode === "calendar" ? "calendar" : "email",
+            })
             setFormStatus({ submitting: false, submitted: true, error: "" })
         } catch (err: any) {
+            console.error("contact-calendar: submit failed", {
+                message: err?.message || "Unknown error",
+                error: err,
+            })
             setFormStatus({ submitting: false, submitted: false, error: err.message })
         } finally {
             submitLockRef.current = false
