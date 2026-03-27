@@ -159,22 +159,23 @@ export async function POST(req: Request) {
                     calendarUrl: '',
                 }
             }
-        } else if (GOOGLE_MEET_LINK.trim()) {
+        } else if (getValidatedGoogleMeetLink()) {
             bookingMode = 'email'
             bookingLinks = {
                 eventId: '',
-                meetingUrl: GOOGLE_MEET_LINK.trim(),
+                meetingUrl: getValidatedGoogleMeetLink(),
                 calendarUrl: '',
             }
         } else {
             console.error('contact: booking configuration missing', {
                 googleCalendarEnabled: GOOGLE_CALENDAR_ENABLED,
                 hasGoogleMeetLink: Boolean(GOOGLE_MEET_LINK.trim()),
+                googleMeetLinkValid: Boolean(getValidatedGoogleMeetLink()),
             })
             return NextResponse.json(
                 {
                     error:
-                        'Booking is not configured. Add GOOGLE_MEET_LINK for simple email booking, or add Google Calendar OAuth env vars for automatic invites.',
+                        'Booking is not configured. Add a valid GOOGLE_MEET_LINK for simple email booking, or add Google Calendar OAuth env vars for automatic invites.',
                 },
                 { status: 500 },
             )
@@ -248,7 +249,7 @@ export async function POST(req: Request) {
         return NextResponse.json(
             {
                 success: true,
-                inviteSent: false,
+                inviteSent: bookingMode === 'calendar',
                 teamEmailSent: true,
                 clientEmailSent: true,
                 deliveryMode: bookingMode,
@@ -381,6 +382,27 @@ function extractEmailAddress(value: string) {
     return match?.[1]?.trim() || value.trim()
 }
 
+function getValidatedGoogleMeetLink() {
+    const trimmed = GOOGLE_MEET_LINK.trim()
+    if (!trimmed) return ''
+
+    try {
+        const url = new URL(trimmed)
+        const isGoogleMeetHost = url.hostname === 'meet.google.com' || url.hostname.endsWith('.meet.google.com')
+        const path = url.pathname.replace(/^\/+/, '')
+        const isPlaceholder = /your-link|your-static-link|whoops/i.test(trimmed)
+        const hasMeetCode = /^[a-z]{3}-[a-z]{4}-[a-z]{3}$/i.test(path)
+
+        if (!isGoogleMeetHost || isPlaceholder || !hasMeetCode) {
+            return ''
+        }
+
+        return `https://meet.google.com/${path}`
+    } catch {
+        return ''
+    }
+}
+
 function serializeError(error: any) {
     return {
         message: error?.message || '',
@@ -407,7 +429,7 @@ async function createCalendarBooking({
 
     const insertedEvent = await calendar.events.insert({
         calendarId: GOOGLE_CALENDAR_ID,
-        sendUpdates: 'none',
+        sendUpdates: 'all',
         conferenceDataVersion: 1,
         requestBody: {
             summary: `GoHype Strategy Call: ${name}`,
