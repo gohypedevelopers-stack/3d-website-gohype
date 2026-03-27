@@ -162,8 +162,14 @@ export async function POST(req: Request) {
                 timeContext,
                 bookingLinks,
             })
-        } catch (error) {
+        } catch (error: any) {
             console.error('contact: post-booking email failed', error)
+            return NextResponse.json(
+                {
+                    error: error?.message || 'Booking was saved, but the confirmation email could not be delivered.',
+                },
+                { status: 500 },
+            )
         }
 
         return NextResponse.json(
