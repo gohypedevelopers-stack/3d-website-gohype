@@ -22,6 +22,13 @@ type BookingResponse = {
     meetingUrl?: string
     inviteSent?: boolean
     deliveryMode?: "calendar" | "email"
+    teamEmailSent?: boolean
+    clientEmailSent?: boolean
+    meetingType?: string
+    meetingLocalTime?: string
+    indiaTime?: string
+    requestReceivedIndiaTime?: string
+    requesterTimeZone?: string
 }
 
 function getDaysInMonth(year: number, month: number) {
@@ -164,6 +171,13 @@ export default function ContactCalendar({ prefill }: Props) {
                 meetingUrl: data?.meetingUrl || "",
                 inviteSent: Boolean(data?.inviteSent),
                 deliveryMode: data?.deliveryMode === "calendar" ? "calendar" : "email",
+                teamEmailSent: Boolean(data?.teamEmailSent),
+                clientEmailSent: Boolean(data?.clientEmailSent),
+                meetingType: data?.meetingType || "Strategy Call",
+                meetingLocalTime: data?.meetingLocalTime || "",
+                indiaTime: data?.indiaTime || "",
+                requestReceivedIndiaTime: data?.requestReceivedIndiaTime || "",
+                requesterTimeZone: data?.requesterTimeZone || "",
             })
             console.log("contact-calendar: booking success", {
                 requestEmail: payload.email,
@@ -216,6 +230,51 @@ export default function ContactCalendar({ prefill }: Props) {
                           ? "A confirmation email with the meeting details was sent to you and our team."
                           : "Your request was emailed to our team. They will confirm the meeting details shortly."}
                 </p>
+                <div className="mt-6 w-full max-w-2xl rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-left">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-yellow-400">Booking Status</p>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <div>
+                            <p className="text-xs text-gray-500">Meeting Type</p>
+                            <p className="text-sm font-medium text-white">{bookingResponse?.meetingType || "Strategy Call"}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-gray-500">Delivery Mode</p>
+                            <p className="text-sm font-medium capitalize text-white">{bookingResponse?.deliveryMode || "email"}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-gray-500">Team Email</p>
+                            <p className="text-sm font-medium text-white">{bookingResponse?.teamEmailSent ? "Sent" : "Pending"}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-gray-500">Client Email</p>
+                            <p className="text-sm font-medium text-white">{bookingResponse?.clientEmailSent ? "Sent" : "Pending"}</p>
+                        </div>
+                        {bookingResponse?.meetingLocalTime && (
+                            <div>
+                                <p className="text-xs text-gray-500">Your Time</p>
+                                <p className="text-sm font-medium text-white">{bookingResponse.meetingLocalTime}</p>
+                            </div>
+                        )}
+                        {bookingResponse?.indiaTime && (
+                            <div>
+                                <p className="text-xs text-gray-500">India Time</p>
+                                <p className="text-sm font-medium text-white">{bookingResponse.indiaTime}</p>
+                            </div>
+                        )}
+                        {bookingResponse?.requesterTimeZone && (
+                            <div>
+                                <p className="text-xs text-gray-500">Time Zone</p>
+                                <p className="text-sm font-medium text-white">{bookingResponse.requesterTimeZone}</p>
+                            </div>
+                        )}
+                        {bookingResponse?.requestReceivedIndiaTime && (
+                            <div>
+                                <p className="text-xs text-gray-500">Request Logged</p>
+                                <p className="text-sm font-medium text-white">{bookingResponse.requestReceivedIndiaTime}</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
                 <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                     {bookingResponse?.meetingUrl && (
                         <a

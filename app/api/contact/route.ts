@@ -185,6 +185,17 @@ export async function POST(req: Request) {
             bookingLinks,
         })
 
+        if (bookingMode === 'email' && !bookingLinks.meetingUrl) {
+            console.error('contact: meeting link missing for email booking', {
+                bookingMode,
+                bookingLinks,
+            })
+            return NextResponse.json(
+                { error: 'Meeting link is missing for this booking. Please configure GOOGLE_MEET_LINK in production.' },
+                { status: 500 },
+            )
+        }
+
         const teamEmail = {
             name: name.trim(),
             email: email.trim(),
@@ -238,9 +249,13 @@ export async function POST(req: Request) {
             {
                 success: true,
                 inviteSent: false,
+                teamEmailSent: true,
+                clientEmailSent: true,
                 deliveryMode: bookingMode,
                 calendarUrl: bookingLinks.calendarUrl,
                 meetingUrl: bookingLinks.meetingUrl,
+                meetingType: leadFields.meetingType || 'Strategy Call',
+                meetingLocalTime: timeContext.meetingLocalTime || '',
                 indiaTime: timeContext.meetingIndiaTime || '',
                 requestReceivedIndiaTime: timeContext.requestReceivedIndiaTime,
                 requesterTimeZone: timeContext.requesterTimeZone,
