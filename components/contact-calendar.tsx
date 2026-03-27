@@ -165,8 +165,11 @@ export default function ContactCalendar({ prefill }: Props) {
                         : "We'll review your request and get back to you shortly."}
                 </p>
                 <p className="mt-3 max-w-lg text-sm text-gray-400">
-                    One confirmation email with meeting schedule, Google Meet link, and calendar details was sent to
-                    you and our team.
+                    {bookingResponse?.calendarUrl
+                        ? "A confirmation email with the calendar invite was sent to you and our team."
+                        : bookingResponse?.meetingUrl
+                          ? "A confirmation email with the meeting details was sent to you and our team."
+                          : "Your request was emailed to our team. They will confirm the meeting details shortly."}
                 </p>
                 <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                     {bookingResponse?.meetingUrl && (

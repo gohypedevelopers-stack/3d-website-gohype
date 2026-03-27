@@ -614,7 +614,7 @@ export default function App() {
           </div>
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-slate-950/30 to-slate-950 pointer-events-none" />
 
-          <div className="relative z-10 mx-auto max-w-7xl px-6 py-8 md:px-8 md:py-12 lg:py-16 w-full">
+          <div className="relative z-10 mx-auto max-w-7xl px-6 pt-8 pb-4 md:px-8 md:py-12 lg:py-16 w-full">
             <div className="grid items-center gap-8 md:gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]">
               <div className="hero-content text-center lg:text-left">
                 <h1 className="text-4xl font-black tracking-tight sm:text-5xl md:text-6xl lg:text-7xl leading-[0.95] text-balance bg-gradient-to-br from-yellow-400 to-amber-300 bg-clip-text text-transparent">
@@ -632,7 +632,7 @@ export default function App() {
                   </a>
                 </div>
               </div>
-              <div className="hero-form relative">
+              <div className="hero-form relative hidden lg:block">
                 <div className="relative mx-auto w-full max-w-[340px] sm:max-w-[420px] lg:max-w-[560px]">
                   <div className="h-[320px] sm:h-[380px] lg:h-[520px]">
                     <HeroSplineScene />
@@ -643,7 +643,7 @@ export default function App() {
           </div>
         </section>
 
-        <section id="partners" ref={partnersRef} className="bg-slate-950 text-white py-24 sm:py-32">
+        <section id="partners" ref={partnersRef} className="bg-slate-950 text-white py-12 sm:py-24 md:py-32">
           <div className="mx-auto max-w-7xl px-6 lg:px-8">
             <div className="text-center mb-16 sm:mb-20">
               <h2 className="text-4xl font-black tracking-tight leading-loose sm:text-5xl md:text-6xl bg-gradient-to-br from-yellow-400 to-amber-300 bg-clip-text text-transparent">

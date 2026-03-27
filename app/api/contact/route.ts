@@ -9,6 +9,7 @@ const CONTACT_RECIPIENTS = process.env.CONTACT_RECIPIENTS || 'gourav.moksh@gmail
 const GMAIL_USER = process.env.GMAIL_USER || ''
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || ''
 const GOOGLE_MEET_LINK = process.env.GOOGLE_MEET_LINK || ''
+const GOOGLE_CALENDAR_ENABLED = process.env.GOOGLE_CALENDAR_ENABLED === 'true'
 const GOOGLE_CALENDAR_CLIENT_ID = process.env.GOOGLE_CALENDAR_CLIENT_ID || ''
 const GOOGLE_CALENDAR_CLIENT_SECRET = process.env.GOOGLE_CALENDAR_CLIENT_SECRET || ''
 const GOOGLE_CALENDAR_REFRESH_TOKEN = process.env.GOOGLE_CALENDAR_REFRESH_TOKEN || ''
@@ -111,10 +112,13 @@ export async function POST(req: Request) {
                 })
             } catch (error: any) {
                 console.error('contact: calendar booking failed', error)
-                return NextResponse.json(
-                    { error: error?.message || 'Failed to create the calendar booking.' },
-                    { status: 500 },
-                )
+
+                bookingMode = 'email'
+                bookingLinks = {
+                    eventId: '',
+                    meetingUrl: GOOGLE_MEET_LINK.trim(),
+                    calendarUrl: '',
+                }
             }
         } else if (GOOGLE_MEET_LINK.trim()) {
             bookingMode = 'email'
@@ -145,9 +149,17 @@ export async function POST(req: Request) {
         }
 
         try {
-            await sendUnifiedBookingEmail(transporter, normalizedRecipients, {
+            await sendTeamNotificationEmail(transporter, normalizedRecipients, {
                 ...teamEmail,
+            })
+
+            await sendRequesterConfirmationEmail(transporter, {
+                name: name.trim(),
+                email: email.trim(),
+                company: leadFields.company,
+                message: finalMessage,
                 meetingType: leadFields.meetingType || 'Strategy Call',
+                timeContext,
                 bookingLinks,
             })
         } catch (error) {
@@ -330,23 +342,6 @@ async function sendTeamNotificationEmail(
     })
 }
 
-async function sendUnifiedBookingEmail(
-    transporter: nodemailer.Transporter,
-    recipients: string[],
-    payload: EmailPayload & { bookingLinks: BookingLinks; meetingType: string },
-) {
-    const allRecipients = normalizeEmailList([...recipients, payload.email])
-
-    await transporter.sendMail({
-        from: `"GoHype Media" <${GMAIL_USER}>`,
-        to: allRecipients,
-        replyTo: GOOGLE_CALENDAR_ORGANIZER_EMAIL || GMAIL_USER,
-        subject: `GoHype booking confirmed: ${payload.name}`,
-        text: buildLeadText(payload),
-        html: buildLeadHtml(payload),
-    })
-}
-
 async function sendRequesterConfirmationEmail(
     transporter: nodemailer.Transporter,
     payload: Omit<EmailPayload, 'source'> & { meetingType: string; bookingLinks: BookingLinks },
@@ -443,8 +438,10 @@ function buildRequesterConfirmationHtml({
     bookingLinks,
 }: Omit<EmailPayload, 'source' | 'email'> & { meetingType: string; bookingLinks: BookingLinks }) {
     const bookingDeliveryText = bookingLinks.calendarUrl
-        ? 'We have already sent the calendar invite to both you and our team.'
-        : 'We have emailed the meeting details to both you and our team.'
+        ? 'Thank you for scheduling with GoHype Media. Your meeting has been reserved and the calendar invitation has been prepared for you.'
+        : bookingLinks.meetingUrl
+          ? 'Thank you for scheduling with GoHype Media. Your meeting request has been received, and the session details are ready below.'
+          : 'Thank you for reaching out to GoHype Media. Our team has received your request and will review your requirements before confirming the meeting details with you shortly.'
 
     const details = [
         timeContext.meetingLocalTime ? `<li><strong>Your time:</strong> ${escapeHtml(timeContext.meetingLocalTime)}</li>` : '',
@@ -457,17 +454,21 @@ function buildRequesterConfirmationHtml({
 
     return `
     <div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.7;color:#0f172a;">
-      <h2 style="margin:0 0 12px;">Your ${escapeHtml(meetingType)} is confirmed</h2>
-      <p style="margin:0 0 16px;">Hi ${escapeHtml(
-          name,
-      )}, your slot is booked with GoHype Media. ${escapeHtml(bookingDeliveryText)}</p>
+      <h2 style="margin:0 0 12px;">Thank you for contacting GoHype Media</h2>
+      <p style="margin:0 0 16px;">Hi ${escapeHtml(name)},</p>
+      <p style="margin:0 0 16px;">${escapeHtml(bookingDeliveryText)}</p>
+      <p style="margin:0 0 16px;">A member of our team will connect with you and guide you through the next steps. If your booking already includes a meeting link or calendar invite, you can use the details below to join at the scheduled time.</p>
       <ul style="padding-left:18px;margin:0 0 20px;">
         ${details}
       </ul>
       <p style="margin:0 0 16px;">
-        <a href="${escapeHtml(
-            bookingLinks.meetingUrl,
-        )}" style="display:inline-block;padding:12px 18px;background:#facc15;color:#111827;text-decoration:none;border-radius:999px;font-weight:700;margin-right:12px;">Open Google Meet</a>
+        ${
+            bookingLinks.meetingUrl
+                ? `<a href="${escapeHtml(
+                      bookingLinks.meetingUrl,
+                  )}" style="display:inline-block;padding:12px 18px;background:#facc15;color:#111827;text-decoration:none;border-radius:999px;font-weight:700;margin-right:12px;">Open Google Meet</a>`
+                : ''
+        }
         ${
             bookingLinks.calendarUrl
                 ? `<a href="${escapeHtml(
@@ -476,7 +477,8 @@ function buildRequesterConfirmationHtml({
                 : ''
         }
       </p>
-      <p style="margin:0;color:#475569;">If you need to reschedule, reply to this email.</p>
+      <p style="margin:0 0 8px;color:#475569;">If you need to update your availability or share anything before the call, simply reply to this email and our team will assist you.</p>
+      <p style="margin:0;color:#475569;">Regards,<br />GoHype Media Team</p>
     </div>
   `
 }
@@ -490,24 +492,30 @@ function buildRequesterConfirmationText({
     bookingLinks,
 }: Omit<EmailPayload, 'source' | 'email'> & { meetingType: string; bookingLinks: BookingLinks }) {
     const bookingDeliveryText = bookingLinks.calendarUrl
-        ? 'We have already sent the calendar invite to both you and our team.'
-        : 'We have emailed the meeting details to both you and our team.'
+        ? 'Thank you for scheduling with GoHype Media. Your meeting has been reserved and the calendar invitation has been prepared for you.'
+        : bookingLinks.meetingUrl
+          ? 'Thank you for scheduling with GoHype Media. Your meeting request has been received, and the session details are ready below.'
+          : 'Thank you for reaching out to GoHype Media. Our team has received your request and will review your requirements before confirming the meeting details with you shortly.'
 
     const lines = [
         `Hi ${name},`,
         '',
-        `Your ${meetingType} with GoHype Media is confirmed.`,
         bookingDeliveryText,
+        'A member of our team will connect with you and guide you through the next steps.',
         '',
         timeContext.meetingLocalTime ? `Your time: ${timeContext.meetingLocalTime}` : '',
         timeContext.meetingIndiaTime ? `India time: ${timeContext.meetingIndiaTime}` : '',
+        meetingType ? `Meeting type: ${meetingType}` : '',
         company ? `Company: ${company}` : '',
         message ? `Notes: ${message}` : '',
         '',
-        `Google Meet: ${bookingLinks.meetingUrl}`,
+        bookingLinks.meetingUrl ? `Google Meet: ${bookingLinks.meetingUrl}` : '',
         bookingLinks.calendarUrl ? `Calendar Event: ${bookingLinks.calendarUrl}` : '',
         '',
-        'If you need to reschedule, reply to this email.',
+        'If you need to update your availability or share anything before the call, reply to this email and our team will assist you.',
+        '',
+        'Regards,',
+        'GoHype Media Team',
     ].filter(Boolean)
 
     return lines.join('\n')
@@ -731,7 +739,8 @@ function normalizeEmailList(values: string[]) {
 
 function isGoogleCalendarConfigured() {
     return Boolean(
-        GOOGLE_CALENDAR_CLIENT_ID &&
+        GOOGLE_CALENDAR_ENABLED &&
+            GOOGLE_CALENDAR_CLIENT_ID &&
             GOOGLE_CALENDAR_CLIENT_SECRET &&
             GOOGLE_CALENDAR_REFRESH_TOKEN &&
             GOOGLE_CALENDAR_ID,
