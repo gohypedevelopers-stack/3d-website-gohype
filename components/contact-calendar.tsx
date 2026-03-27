@@ -108,6 +108,15 @@ export default function ContactCalendar({ prefill }: Props) {
                 payload.meetingLocalIso = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, "0")}-${String(localDate.getDate()).padStart(2, "0")}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
             }
 
+            console.log("contact-calendar: submit payload", {
+                formData,
+                payload,
+                selectedDate,
+                selectedTime,
+                currentMonth: monthName,
+                currentYear: year,
+            })
+
             const res = await fetch("/api/contact", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -134,12 +143,17 @@ export default function ContactCalendar({ prefill }: Props) {
             console.log("contact-calendar: api response", {
                 ok: res.ok,
                 status: res.status,
+                requestEmail: payload.email,
+                requestName: payload.name,
                 data,
             })
 
             if (!res.ok) {
                 console.error("contact-calendar: api error", {
                     status: res.status,
+                    requestEmail: payload.email,
+                    requestName: payload.name,
+                    payload,
                     data,
                 })
                 throw new Error(data?.error || `Failed to submit (${res.status})`)
@@ -152,15 +166,19 @@ export default function ContactCalendar({ prefill }: Props) {
                 deliveryMode: data?.deliveryMode === "calendar" ? "calendar" : "email",
             })
             console.log("contact-calendar: booking success", {
+                requestEmail: payload.email,
+                requestName: payload.name,
                 calendarUrl: data?.calendarUrl || "",
                 meetingUrl: data?.meetingUrl || "",
                 inviteSent: Boolean(data?.inviteSent),
                 deliveryMode: data?.deliveryMode === "calendar" ? "calendar" : "email",
+                fullResponse: data,
             })
             setFormStatus({ submitting: false, submitted: true, error: "" })
         } catch (err: any) {
             console.error("contact-calendar: submit failed", {
                 message: err?.message || "Unknown error",
+                formData,
                 error: err,
             })
             setFormStatus({ submitting: false, submitted: false, error: err.message })
