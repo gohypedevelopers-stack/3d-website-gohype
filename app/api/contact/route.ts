@@ -2,12 +2,15 @@ import { randomUUID } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { google, type calendar_v3 } from 'googleapis'
 import nodemailer from 'nodemailer'
+import { Resend } from 'resend'
 
 export const runtime = 'nodejs'
 
 const CONTACT_RECIPIENTS = process.env.CONTACT_RECIPIENTS || 'gourav.moksh@gmail.com'
 const GMAIL_USER = process.env.GMAIL_USER || ''
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || ''
+const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
+const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'GoHype Media <onboarding@resend.dev>'
 const GOOGLE_MEET_LINK = process.env.GOOGLE_MEET_LINK || ''
 const GOOGLE_CALENDAR_ENABLED = process.env.GOOGLE_CALENDAR_ENABLED === 'true'
 const GOOGLE_CALENDAR_CLIENT_ID = process.env.GOOGLE_CALENDAR_CLIENT_ID || ''
@@ -54,6 +57,17 @@ type BookingRequest = {
     meetingEnd: Date
 }
 
+type MailProvider = {
+    send: (options: {
+        to: string | string[]
+        subject: string
+        text: string
+        html: string
+        replyTo?: string
+        from?: string
+    }) => Promise<void>
+}
+
 export async function POST(req: Request) {
     let body: any
 
@@ -79,13 +93,13 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Email service is unavailable.' }, { status: 500 })
     }
 
-    if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
-        console.error('contact: missing GMAIL_USER or GMAIL_APP_PASSWORD env vars')
+    if (!hasMailProvider()) {
+        console.error('contact: no mail provider configured')
         return NextResponse.json({ error: 'Email service is not configured.' }, { status: 500 })
     }
 
     const timeContext = buildTimeContext(body, req, leadFields.meetingLabel)
-    const transporter = createTransporter()
+    const mailProvider = createMailProvider()
     const isCalendarBooking = Boolean(meetingStart || leadFields.source === 'calendar' || leadFields.meetingLabel)
 
     if (isCalendarBooking) {
@@ -149,11 +163,11 @@ export async function POST(req: Request) {
         }
 
         try {
-            await sendTeamNotificationEmail(transporter, normalizedRecipients, {
+            await sendTeamNotificationEmail(mailProvider, normalizedRecipients, {
                 ...teamEmail,
             })
 
-            await sendRequesterConfirmationEmail(transporter, {
+            await sendRequesterConfirmationEmail(mailProvider, {
                 name: name.trim(),
                 email: email.trim(),
                 company: leadFields.company,
@@ -210,8 +224,8 @@ export async function POST(req: Request) {
     })
 
     try {
-        await transporter.sendMail({
-            from: `"GoHype Inquiry" <${GMAIL_USER}>`,
+        await mailProvider.send({
+            from: defaultFromAddress('GoHype Inquiry'),
             to: normalizedRecipients,
             replyTo: email.trim(),
             subject: `New GoHype inquiry from ${name.trim()}`,
@@ -234,14 +248,66 @@ export async function POST(req: Request) {
     }
 }
 
-function createTransporter() {
-    return nodemailer.createTransport({
+function hasMailProvider() {
+    return Boolean(RESEND_API_KEY || (GMAIL_USER && GMAIL_APP_PASSWORD))
+}
+
+function createMailProvider(): MailProvider {
+    if (RESEND_API_KEY) {
+        const resend = new Resend(RESEND_API_KEY)
+
+        return {
+            async send({ to, subject, text, html, replyTo, from }) {
+                const response = await resend.emails.send({
+                    from: from || defaultFromAddress('GoHype Media'),
+                    to: Array.isArray(to) ? to : [to],
+                    subject,
+                    text,
+                    html,
+                    replyTo: replyTo ? [replyTo] : undefined,
+                })
+
+                if (response.error) {
+                    throw new Error(response.error.message || 'Resend failed to deliver the email.')
+                }
+            },
+        }
+    }
+
+    const transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
             user: GMAIL_USER,
             pass: GMAIL_APP_PASSWORD,
         },
     })
+
+    return {
+        async send({ to, subject, text, html, replyTo, from }) {
+            await transporter.sendMail({
+                from: from || defaultFromAddress('GoHype Media'),
+                to,
+                replyTo,
+                subject,
+                text,
+                html,
+            })
+        },
+    }
+}
+
+function defaultFromAddress(label: string) {
+    if (RESEND_API_KEY) {
+        const email = extractEmailAddress(RESEND_FROM_EMAIL)
+        return `${label} <${email}>`
+    }
+
+    return `"${label}" <${GMAIL_USER}>`
+}
+
+function extractEmailAddress(value: string) {
+    const match = /<([^>]+)>/.exec(value)
+    return match?.[1]?.trim() || value.trim()
 }
 
 async function createCalendarBooking({
@@ -334,12 +400,12 @@ async function waitForConferenceLink(calendar: calendar_v3.Calendar, initialEven
 }
 
 async function sendTeamNotificationEmail(
-    transporter: nodemailer.Transporter,
+    mailProvider: MailProvider,
     recipients: string[],
     payload: EmailPayload,
 ) {
-    await transporter.sendMail({
-        from: `"GoHype Inquiry" <${GMAIL_USER}>`,
+    await mailProvider.send({
+        from: defaultFromAddress('GoHype Inquiry'),
         to: recipients,
         replyTo: payload.email,
         subject: `New GoHype booking from ${payload.name}`,
@@ -349,11 +415,11 @@ async function sendTeamNotificationEmail(
 }
 
 async function sendRequesterConfirmationEmail(
-    transporter: nodemailer.Transporter,
+    mailProvider: MailProvider,
     payload: Omit<EmailPayload, 'source'> & { meetingType: string; bookingLinks: BookingLinks },
 ) {
-    await transporter.sendMail({
-        from: `"GoHype Media" <${GMAIL_USER}>`,
+    await mailProvider.send({
+        from: defaultFromAddress('GoHype Media'),
         to: payload.email,
         replyTo: GOOGLE_CALENDAR_ORGANIZER_EMAIL || GMAIL_USER,
         subject: `Your ${payload.meetingType} with GoHype is confirmed`,
