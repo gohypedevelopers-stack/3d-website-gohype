@@ -2,9 +2,13 @@
 
 const nodemailer = require('nodemailer')
 
-const CONTACT_RECIPIENTS = process.env.CONTACT_RECIPIENTS || 'gourav.moksh@gmail.com'
-const GMAIL_USER = 'gourav.moksh@gmail.com'
-const GMAIL_APP_PASSWORD = 'symp nhhh mymd xutz'
+const SMTP_HOST = process.env.SMTP_HOST || ''
+const SMTP_PORT = Number(process.env.SMTP_PORT || 465)
+const SMTP_SECURE = (process.env.SMTP_SECURE || 'true') === 'true'
+const SMTP_USER = process.env.SMTP_USER || ''
+const SMTP_PASS = process.env.SMTP_PASS || ''
+const SMTP_FROM_EMAIL = process.env.SMTP_FROM_EMAIL || SMTP_USER
+const CONTACT_RECIPIENTS = process.env.CONTACT_RECIPIENTS || SMTP_USER
 const INDIA_TIME_ZONE = 'Asia/Kolkata'
 
 module.exports = async function handler(req, res) {
@@ -43,6 +47,11 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: 'Email service is unavailable.' })
   }
 
+  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
+    console.error('contact: missing SMTP configuration')
+    return res.status(500).json({ error: 'SMTP mail is not configured.' })
+  }
+
   const finalMessage = firstNonEmpty([message, details]) || ''
   const timeContext = buildTimeContext(body, req, leadFields.meetingLabel)
 
@@ -70,15 +79,17 @@ module.exports = async function handler(req, res) {
 
   try {
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_SECURE,
       auth: {
-        user: GMAIL_USER,
-        pass: GMAIL_APP_PASSWORD,
+        user: SMTP_USER,
+        pass: SMTP_PASS,
       },
     })
 
     await transporter.sendMail({
-      from: `"GoHype Inquiry" <${GMAIL_USER}>`,
+      from: `"GoHype Inquiry" <${SMTP_FROM_EMAIL}>`,
       to: normalizedRecipients,
       replyTo: email,
       subject: `New GoHype inquiry from ${name}`,

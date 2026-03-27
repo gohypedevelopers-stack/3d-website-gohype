@@ -407,7 +407,7 @@ async function sendRequesterConfirmationEmail(
     await mailProvider.send({
         from: defaultFromAddress('GoHype Media'),
         to: payload.email,
-        replyTo: GOOGLE_CALENDAR_ORGANIZER_EMAIL || GMAIL_USER,
+        replyTo: GOOGLE_CALENDAR_ORGANIZER_EMAIL || SMTP_USER,
         subject: `Your ${payload.meetingType} with GoHype is confirmed`,
         text: buildRequesterConfirmationText(payload),
         html: buildRequesterConfirmationHtml(payload),
