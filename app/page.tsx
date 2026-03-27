@@ -1,13 +1,19 @@
-﻿"use client"
+"use client"
 
 import type React from "react"
 import { useEffect, useRef, useState } from "react"
-import * as THREE from "three"
-import { Menu, Code, PenTool, Wind, ArrowRight, MessageCircle, X, Send } from "lucide-react"
+import { Menu, Code, PenTool, Wind, ArrowRight, Star, MessageCircle, X, Send } from "lucide-react"
 import gsap from "gsap"
 import { ScrollTrigger } from "gsap/ScrollTrigger"
-import { sendEmail } from "./actions" // This imports your server-side function
+// import { sendEmail } from "./actions" // Disabled to avoid sending email on hero form submit
 import ContactCalendar from "../components/contact-calendar"
+import { LampContainer } from "@/components/ui/lamp"
+import dynamic from "next/dynamic"
+
+// Lazy-load heavy components
+const InteractiveRobotSpline = dynamic(() => import("@/components/blocks/interactive-3d-robot").then((mod) => ({ default: mod.InteractiveRobotSpline })), { ssr: false })
+
+import { motion } from "framer-motion"
 
 if (typeof window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger)
@@ -19,8 +25,8 @@ const DATA = {
   tagline: "Experience the Future of the Web in 3D",
   subTagline:
     "We build immersive, next gen websites powered by Three.js, WebGL, and bold interaction design. Turn your online presence into an experience that moves, breathes, and sells.",
-  ctaPrimary: { label: "Book a Clarity Call", href: "#quote" },
-  ctaSecondary: { label: "View Work", href: "#work" },
+  ctaPrimary: { label: "Schedule a Call", href: "#quote" },
+  ctaSecondary: { label: "Explore Our Work", href: "#work" },
   contact: {
     phone: "+91-8447788703",
     email: "info@gohypemedia.com",
@@ -129,6 +135,10 @@ const DATA = {
       "video": "/videos/delan.mp4"
     },
     {
+      "category": "E-Commerce & 3D",
+      "video": "/videos/delan1.mp4"
+    },
+    {
       "category": "Technology & Innovation",
       "video": "/videos/katana.mp4"
     },
@@ -152,6 +162,10 @@ const DATA = {
     { label: "YouTube", href: "#" },
   ],
 }
+
+const PRIMARY_COLOR = 0xffd700
+const PRIMARY_ACCENT = 0xffc04d
+const PRIMARY_GLOW = 0xffe082
 
 // Simple Stacking Cards Components
 function StackingCards({ children, totalCards }: { children: React.ReactNode; totalCards: number }) {
@@ -196,7 +210,7 @@ function GlowCard({ children, className = "" }: { children: React.ReactNode; cla
   )
 }
 
-// AI Chat Component
+// AI Chat Compone
 function AIChat() {
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Array<{ text: string; isUser: boolean }>>([
@@ -221,7 +235,7 @@ function AIChat() {
         botResponse = `You can reach us at ${DATA.contact.email} or call us at ${DATA.contact.phone}.`
       } else if (userMessage.includes("projects")) {
         botResponse = `Here are some of our projects: ${DATA.projects
-          .map((project) => project.category)
+          .map((project: any) => project.category)
           .join(", ")}.`
       } else if (userMessage.includes("testimonial")) {
         botResponse = `Here's what our clients say: \"${DATA.partners[0].testimonial.text}\" - ${DATA.partners[0].testimonial.author}`
@@ -233,230 +247,25 @@ function AIChat() {
 
   return (
     <>
-      {/* Chat Button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-gradient-to-r from-yellow-400 to-amber-300 text-slate-950 shadow-2xl shadow-yellow-400/30 hover:shadow-yellow-400/50 hover:scale-110 transition-all flex items-center justify-center"
-        aria-label="Open chat"
-      >
-        {isOpen ? <X size={24} /> : <MessageCircle size={24} />}
-      </button>
-
-      {/* Chat Window */}
-      {isOpen && (
-        <div className="fixed bottom-24 right-6 z-50 w-96 max-w-[calc(100vw-3rem)] h-[500px] rounded-3xl bg-slate-950 border border-white/10 shadow-2xl flex flex-col overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-yellow-400 to-amber-300 p-4">
-            <h3 className="text-lg font-bold text-slate-950">Chat with us</h3>
-            <p className="text-sm text-slate-950/80">We typically reply in minutes</p>
-          </div>
-
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}>
-                <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-2 ${msg.isUser
-                    ? 'bg-gradient-to-r from-yellow-400 to-amber-300 text-slate-950'
-                    : 'bg-white/10 text-white'
-                    }`}
-                >
-                  {msg.text}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Input */}
-          <div className="border-t border-white/10 p-4">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                placeholder="Type a message..."
-                className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-white placeholder:text-white/50 focus:border-primary focus:outline-none"
-              />
-              <button
-                onClick={handleSend}
-                className="rounded-xl bg-gradient-to-r from-yellow-400 to-amber-300 p-2 text-slate-950 hover:scale-105 transition-transform"
-              >
-                <Send size={20} />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Chat Button and window commented out */}
     </>
   )
 }
 
-// ThreeBackground Component
-function ThreeBackground() {
-  const mountRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    const mount = mountRef.current
-    if (!mount) return
-
-    const scene = new THREE.Scene()
-    scene.fog = new THREE.Fog(0x0a0a0a, 15, 50)
-
-    const camera = new THREE.PerspectiveCamera(50, mount.clientWidth / mount.clientHeight, 0.1, 100)
-    camera.position.set(0, 0, 8)
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
-    renderer.setSize(mount.clientWidth, mount.clientHeight)
-    renderer.outputColorSpace = THREE.SRGBColorSpace
-    renderer.setClearColor(0x000000, 0)
-    mount.appendChild(renderer.domElement)
-
-    const amb = new THREE.AmbientLight(0xffd700, 0.5)
-    const dir = new THREE.DirectionalLight(0xffd700, 2.5)
-    dir.position.set(5, 5, 5)
-    const dir2 = new THREE.DirectionalLight(0xffb700, 2)
-    dir2.position.set(-5, -3, -5)
-    const pointLight = new THREE.PointLight(0xffc107, 1.5, 20)
-    pointLight.position.set(0, 0, 5)
-    scene.add(amb, dir, dir2, pointLight)
-
-    const torusGeo = new THREE.TorusKnotGeometry(1.2, 0.4, 128, 16)
-    const torusMat = new THREE.MeshStandardMaterial({
-      color: 0xffd700,
-      metalness: 0.8,
-      roughness: 0.2,
-      wireframe: false,
-      emissive: 0xffb700,
-      emissiveIntensity: 0.3,
-    })
-    const torusKnot = new THREE.Mesh(torusGeo, torusMat)
-    torusKnot.position.set(-2, 1, -2)
-    scene.add(torusKnot)
-
-    const sphereGeo = new THREE.IcosahedronGeometry(0.8, 1)
-    const sphereMat = new THREE.MeshStandardMaterial({
-      color: 0xffc107,
-      metalness: 0.7,
-      roughness: 0.25,
-      wireframe: true,
-      emissive: 0xffb700,
-      emissiveIntensity: 0.2,
-    })
-    const sphere = new THREE.Mesh(sphereGeo, sphereMat)
-    sphere.position.set(3, -1, -3)
-    scene.add(sphere)
-
-    const octaGeo = new THREE.OctahedronGeometry(1, 0)
-    const octaMat = new THREE.MeshStandardMaterial({
-      color: 0xffeb3b,
-      metalness: 0.75,
-      roughness: 0.2,
-      wireframe: false,
-      emissive: 0xffa000,
-      emissiveIntensity: 0.25,
-    })
-    const octahedron = new THREE.Mesh(octaGeo, octaMat)
-    octahedron.position.set(2, 2, -4)
-    scene.add(octahedron)
-
-    const pGeo = new THREE.BufferGeometry()
-    const COUNT = 1200
-    const positions = new Float32Array(COUNT * 3)
-    const colors = new Float32Array(COUNT * 3)
-    for (let i = 0; i < COUNT * 3; i += 3) {
-      positions[i] = (Math.random() - 0.5) * 25
-      positions[i + 1] = (Math.random() - 0.5) * 25
-      positions[i + 2] = (Math.random() - 0.5) * 25
-      colors[i] = 1.0
-      colors[i + 1] = 0.8 + Math.random() * 0.2
-      colors[i + 2] = 0.0
-    }
-    pGeo.setAttribute("position", new THREE.BufferAttribute(positions, 3))
-    pGeo.setAttribute("color", new THREE.BufferAttribute(colors, 3))
-    const pMat = new THREE.PointsMaterial({
-      size: 0.025,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.7,
-      blending: THREE.AdditiveBlending,
-    })
-    const points = new THREE.Points(pGeo, pMat)
-    scene.add(points)
-
-    let mouseX = 0, mouseY = 0, targetX = 0, targetY = 0
-
-    const onMove = (e: MouseEvent) => {
-      const rect = mount.getBoundingClientRect()
-      targetX = ((e.clientX - rect.left) / rect.width - 0.5) * 2
-      targetY = ((e.clientY - rect.top) / rect.height - 0.5) * 2
-    }
-    mount.addEventListener("mousemove", onMove)
-
-    const onResize = () => {
-      if (!mount) return
-      const { clientWidth, clientHeight } = mount
-      camera.aspect = clientWidth / clientHeight
-      camera.updateProjectionMatrix()
-      renderer.setSize(clientWidth, clientHeight)
-    }
-    window.addEventListener("resize", onResize)
-
-    let frameId: number
-    const tick = () => {
-      frameId = requestAnimationFrame(tick)
-      mouseX += (targetX - mouseX) * 0.05
-      mouseY += (targetY - mouseY) * 0.05
-
-      torusKnot.rotation.x += 0.003
-      torusKnot.rotation.y += 0.005
-      torusKnot.position.x += (mouseX * 1.2 - torusKnot.position.x + 2) * 0.03
-      torusKnot.position.y += (-mouseY * 1.2 - torusKnot.position.y - 1) * 0.03
-
-      sphere.rotation.x += 0.002
-      sphere.rotation.y += 0.004
-      sphere.position.y += Math.sin(Date.now() * 0.001) * 0.003
-      sphere.position.x += (mouseX * 0.8 - sphere.position.x - 3) * 0.02
-
-      octahedron.rotation.z += 0.004
-      octahedron.rotation.y += 0.003
-      octahedron.position.x += Math.cos(Date.now() * 0.0008) * 0.003
-      octahedron.position.y += (mouseY * 0.6 - octahedron.position.y - 2) * 0.025
-
-      points.rotation.y -= 0.0008
-      points.rotation.x = mouseY * 0.15
-      points.rotation.z = mouseX * 0.1
-
-      pointLight.position.x = mouseX * 3
-      pointLight.position.y = -mouseY * 3
-
-      camera.position.x += (mouseX * 0.3 - camera.position.x) * 0.02
-      camera.position.y += (-mouseY * 0.3 - camera.position.y) * 0.02
-      camera.lookAt(scene.position)
-
-      renderer.render(scene, camera)
-    }
-    tick()
-
-    return () => {
-      cancelAnimationFrame(frameId)
-      window.removeEventListener("resize", onResize)
-      if (mount) mount.removeEventListener("mousemove", onMove)
-      if (mount && renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement)
-      torusGeo.dispose()
-      torusMat.dispose()
-      sphereGeo.dispose()
-      sphereMat.dispose()
-      octaGeo.dispose()
-      octaMat.dispose()
-      pGeo.dispose()
-      pMat.dispose()
-      renderer.dispose()
-    }
-  }, [])
-
-  return <div ref={mountRef} className="absolute inset-0 h-full w-full" />
+function HeroSplineScene() {
+  return (
+    <div className="relative h-full w-full overflow-hidden rounded-[2rem]">
+      <div className="pointer-events-none absolute inset-x-[14%] top-[18%] z-[1] h-24 rounded-full bg-yellow-400/15 blur-3xl sm:h-32" />
+      <div className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_50%_35%,rgba(251,191,36,0.16),transparent_38%),radial-gradient(circle_at_50%_70%,rgba(255,255,255,0.05),transparent_48%)]" />
+      <div className="absolute inset-[-10%] z-[2]">
+        <InteractiveRobotSpline
+          scene="https://prod.spline.design/PyzDhpQ9E5f1E3MT/scene.splinecode"
+          className="relative h-full w-full scale-[1.10] translate-y-4 [filter:hue-rotate(150deg)_contrast(1.15)]"
+        />
+      </div>
+    </div>
+  )
 }
 
 const MagneticButton = ({ children, className = "", href, ...props }: any) => {
@@ -494,6 +303,8 @@ const MagneticButton = ({ children, className = "", href, ...props }: any) => {
   )
 }
 
+import Image from "next/image"
+
 const Header = ({ siteName, navLinks, ctaPrimary }: any) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const headerRef = useRef<HTMLElement>(null)
@@ -506,13 +317,15 @@ const Header = ({ siteName, navLinks, ctaPrimary }: any) => {
   return (
     <header
       ref={headerRef}
-      className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 backdrop-blur-xl bg-slate-950/80"
+      className="fixed top-0 left-0 right-0 z-[100] border-b border-white/5 backdrop-blur-xl bg-slate-950/80"
     >
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 md:px-8">
         <a href="#" className="flex items-center gap-3 group" aria-label="Go home">
-          <img
+          <Image
             src="/logo.png"
             alt={`${siteName} logo`}
+            width={44}
+            height={44}
             className="h-11 w-11 group-hover:scale-110 transition-transform duration-300"
           />
           <span className="text-xl font-bold tracking-tight text-white">{siteName}</span>
@@ -533,11 +346,10 @@ const Header = ({ siteName, navLinks, ctaPrimary }: any) => {
 
         <div className="flex items-center gap-4">
           <a
-            href={ctaPrimary.href}
-            className="hidden sm:flex items-center gap-2 rounded-full bg-gradient-to-r from-yellow-400 to-amber-300 px-6 py-2.5 text-sm font-semibold text-slate-950 shadow-lg shadow-yellow-400/25 hover:shadow-yellow-400/40 hover:scale-105 transition-all duration-300"
+            href={ctaPrimary?.href || "#quote"}
+            className="hidden md:inline-flex items-center justify-center rounded-full bg-gradient-to-r from-yellow-400 to-amber-300 px-4 py-2 text-sm font-bold text-slate-950 shadow-lg shadow-yellow-400/30 hover:shadow-yellow-400/50 hover:scale-[1.02] transition-all"
           >
-            {ctaPrimary.label}
-            <ArrowRight size={16} />
+            {ctaPrimary?.label || "Book a Clarity Call"}
           </a>
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -562,6 +374,13 @@ const Header = ({ siteName, navLinks, ctaPrimary }: any) => {
                 {link.label}
               </a>
             ))}
+            <a
+              href={ctaPrimary?.href || "#quote"}
+              onClick={() => setIsMenuOpen(false)}
+              className="mt-2 block text-center rounded-full bg-gradient-to-r from-yellow-400 to-amber-300 px-4 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-yellow-400/30 hover:shadow-yellow-400/50 hover:scale-[1.01] transition-all"
+            >
+              {ctaPrimary?.label || "Book a Clarity Call"}
+            </a>
           </div>
         </div>
       )}
@@ -575,9 +394,11 @@ const Footer = ({ siteName, contact, social }: any) => (
       <div className="grid grid-cols-1 gap-12 md:grid-cols-4">
         <div className="md:col-span-2">
           <div className="flex items-center gap-3 mb-6">
-            <img
+            <Image
               src="/logo.png"
               alt={`${siteName} logo`}
+              width={48}
+              height={48}
               className="h-12 w-12"
             />
             <span className="text-xl font-bold text-white">{siteName}</span>
@@ -640,45 +461,10 @@ const Footer = ({ siteName, contact, social }: any) => (
   </footer>
 )
 
-const InputField = ({ label, name, type = "text", value, onChange, placeholder, className }: any) => (
-  <div className={className}>
-    <label htmlFor={name} className="sr-only">
-      {label}
-    </label>
-    <input
-      id={name}
-      name={name}
-      type={type}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      className="w-full rounded-xl border border-white/10 bg-white/5 px-5 py-3.5 text-white placeholder:text-gray-500 focus:border-yellow-400 focus:outline-none focus:ring-2 focus:ring-yellow-400/20 transition-all"
-    />
-  </div>
-)
-
-const TextAreaField = ({ label, name, value, onChange, placeholder, className, rows = 4 }: any) => (
-  <div className={className}>
-    <label htmlFor={name} className="sr-only">
-      {label}
-    </label>
-    <textarea
-      id={name}
-      name={name}
-      rows={rows}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      className="w-full rounded-xl border border-white/10 bg-white/5 px-5 py-3.5 text-white placeholder:text-gray-500 focus:border-yellow-400 focus:outline-none focus:ring-2 focus:ring-yellow-400/20 transition-all resize-none"
-    />
-  </div>
-)
-
 export default function App() {
   // --- STATE MANAGEMENT ---
-  const [formStatus, setFormStatus] = useState({ submitting: false, submitted: false, error: "" });
-  const [formData, setFormData] = useState({ name: "", email: "", company: "", budget: "", message: "" });
   const [selectedBrand, setSelectedBrand] = useState<number | null>(0);
+  const testimonialRotationMs = 5000;
 
   // --- REFS FOR ANIMATIONS ---
   const heroRef = useRef<HTMLDivElement>(null);
@@ -770,27 +556,29 @@ export default function App() {
     };
   }, []);
 
-  // --- HANDLER FUNCTIONS ---
-  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setSelectedBrand((currentIndex) => {
+        if (DATA.partners.length <= 1) {
+          return 0;
+        }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormStatus({ submitting: true, submitted: false, error: "" });
+        let nextIndex = Math.floor(Math.random() * DATA.partners.length);
+        while (currentIndex !== null && nextIndex === currentIndex) {
+          nextIndex = Math.floor(Math.random() * DATA.partners.length);
+        }
+        return nextIndex;
+      });
+    }, testimonialRotationMs);
 
-    // Call the server action with the form data
-    const result = await sendEmail(formData);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
-    if (result && result.error) {
-      // If there's an error, update the state to show it
-      setFormStatus({ submitting: false, submitted: false, error: result.error });
-      return;
-    }
 
-    // On success, update the state and clear the form
-    setFormStatus({ submitting: false, submitted: true, error: "" });
-    setFormData({ name: "", email: "", company: "", budget: "", message: "" });
-  };
+
+  // Do NOT send an email here—just hand off to the bottom form
 
   const handleBrandClick = (index: number) => {
     setSelectedBrand(index === selectedBrand ? null : index);
@@ -815,70 +603,40 @@ export default function App() {
       <div ref={spotlightRef} id="cursor-spotlight" />
 
       <Header siteName={DATA.siteName} navLinks={DATA.navLinks} ctaPrimary={DATA.ctaPrimary} />
+      {/* hero CTA in header uses DATA.ctaPrimary */}
 
       <AIChat />
 
-      <main className="pt-20">
-        <section ref={heroRef} className="relative overflow-hidden min-h-screen flex items-center">
-          <div className="absolute inset-0 z-0 h-full w-full">
-            <ThreeBackground />
+      <main className="pt-[76px] md:pt-[84px]">
+        <section ref={heroRef} className="relative overflow-hidden">
+          <div className="absolute inset-0 z-0 h-full w-full bg-slate-950">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(251,191,36,0.05),transparent_50%)]" />
           </div>
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-slate-950/30 to-slate-950 pointer-events-none" />
 
-          <div className="relative z-10 mx-auto max-w-7xl px-6 py-20 md:px-8 w-full">
-            <div className="grid items-center gap-16 lg:grid-cols-2">
+          <div className="relative z-10 mx-auto max-w-7xl px-6 py-8 md:px-8 md:py-12 lg:py-16 w-full">
+            <div className="grid items-center gap-8 md:gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]">
               <div className="hero-content text-center lg:text-left">
-                <h1 className="text-5xl font-black tracking-tight md:text-6xl lg:text-7xl leading-none text-balance bg-gradient-to-br from-yellow-400 to-amber-300 bg-clip-text text-transparent">
+                <h1 className="text-4xl font-black tracking-tight sm:text-5xl md:text-6xl lg:text-7xl leading-[0.95] text-balance bg-gradient-to-br from-yellow-400 to-amber-300 bg-clip-text text-transparent">
                   {DATA.tagline}
                 </h1>
-                <p className="mt-8 max-w-2xl mx-auto lg:mx-0 text-xl text-gray-400 leading-relaxed text-pretty">
+                <p className="mt-4 max-w-2xl mx-auto lg:mx-0 text-base sm:text-lg md:text-xl text-slate-300/85 leading-relaxed text-pretty">
                   {DATA.subTagline}
                 </p>
-                <div className="mt-12 flex flex-wrap gap-5 justify-center lg:justify-start">
+                <div className="mt-8 flex flex-wrap gap-4 justify-center lg:justify-start">
                   <a
                     href={DATA.ctaSecondary.href}
-                    className="rounded-full border-2 border-white/10 bg-white/[0.03] backdrop-blur-xl px-8 py-4 text-base font-bold text-white hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300 flex items-center gap-2"
+                    className="rounded-full border border-white/10 bg-white/[0.03] backdrop-blur-xl px-8 py-4 text-base font-bold text-white hover:bg-white/[0.08] hover:border-yellow-400/20 transition-all duration-300 flex items-center gap-2"
                   >
                     Explore Our Work
                   </a>
                 </div>
               </div>
-
               <div className="hero-form relative">
-                <div className="rounded-3xl bg-white/[0.03] border border-white/10 p-8 backdrop-blur-xl shadow-2xl">
-                  <h3 className="text-center text-3xl font-bold tracking-tight text-white mb-2">Get Started Today</h3>
-                  <p className="text-center text-gray-400 mb-8">
-                    Let’s build something that makes people say “Whoa.”
-                  </p>
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    <InputField name="name" value={formData.name} onChange={handleFormChange} placeholder="Your Name" />
-                    <InputField
-                      name="email"
-                      type="email"
-                      value={formData.email}
-                      onChange={handleFormChange}
-                      placeholder="Email Address"
-                    />
-                    <InputField
-                      name="company"
-                      value={formData.company}
-                      onChange={handleFormChange}
-                      placeholder="Company Name"
-                    />
-                    <InputField
-                      name="budget"
-                      value={formData.budget}
-                      onChange={handleFormChange}
-                      placeholder="Project Budget"
-                    />
-                    <button
-                      type="submit"
-                      disabled={formStatus.submitting}
-                      className="w-full rounded-full bg-gradient-to-r from-yellow-400 to-amber-300 px-8 py-4 text-base font-bold text-slate-950 shadow-lg shadow-yellow-400/30 hover:shadow-yellow-400/50 hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {formStatus.submitting ? "Sending..." : "Request a Quote"}
-                    </button>
-                  </form>
+                <div className="relative mx-auto w-full max-w-[340px] sm:max-w-[420px] lg:max-w-[560px]">
+                  <div className="h-[320px] sm:h-[380px] lg:h-[520px]">
+                    <HeroSplineScene />
+                  </div>
                 </div>
               </div>
             </div>
@@ -975,20 +733,25 @@ export default function App() {
               <p className="text-sm text-gray-400 mt-4">Scroll down to explore our projects ↓</p>
             </div>
 
-            <StackingCards>
+            <StackingCards totalCards={DATA.projects.length + 1}>
               {DATA.projects.map((p, i) => (
-                <StackingCardItem key={i} index={i} className="w-full aspect-video mb-4 md:mb-10">
-                  <div className="w-full h-full max-w-6xl mx-auto">
-                    <div className="w-full h-full rounded-2xl md:rounded-3xl bg-gradient-to-br from-yellow-400/10 to-amber-300/5 p-0.5 md:p-1 shadow-2xl shadow-yellow-400/20">
-                      <div className="w-full h-full rounded-2xl md:rounded-3xl bg-slate-950/95 backdrop-blur-xl overflow-hidden">
-                        <div className="relative w-full h-full rounded-xl md:rounded-2xl overflow-hidden bg-slate-950">
+                <StackingCardItem
+                  key={i}
+                  index={i}
+                  className="mb-6 w-full md:mb-12 md:aspect-[16/9] md:max-h-[70vh] md:min-h-[220px]"
+                >
+                  <div className="mx-auto w-full max-w-6xl md:h-full">
+                    <div className="w-full rounded-2xl bg-gradient-to-br from-yellow-400/10 to-amber-300/5 p-0.5 shadow-2xl shadow-yellow-400/20 md:h-full md:rounded-3xl md:p-1">
+                      <div className="w-full overflow-hidden rounded-2xl bg-slate-950/95 backdrop-blur-xl md:h-full md:rounded-3xl">
+                        <div className="relative w-full overflow-hidden rounded-xl bg-slate-950 md:h-full md:rounded-2xl">
                           <video
                             src={p.video}
+                            preload="none"
                             autoPlay
                             loop
                             muted
                             playsInline
-                            className="absolute inset-0 w-full h-full object-cover"
+                            className="relative block h-auto w-full object-contain object-center md:absolute md:inset-0 md:h-full md:w-full md:object-cover"
                           />
                           <div className="absolute inset-0 bg-gradient-to-b from-slate-950/40 via-transparent to-slate-950/60" />
 
@@ -1012,7 +775,10 @@ export default function App() {
                 </StackingCardItem>
               ))}
 
-              <StackingCardItem index={DATA.projects.length} className="w-full aspect-video mb-4 md:mb-10">
+              <StackingCardItem
+                index={DATA.projects.length}
+                className="w-full aspect-[16/9] max-h-[70vh] min-h-[220px] mb-6 md:mb-12"
+              >
                 <div className="h-full w-full max-w-6xl mx-auto flex items-center justify-center px-4">
                   <div className="text-center">
                     <h3 className="text-5xl md:text-7xl lg:text-9xl leading-loose font-black bg-gradient-to-br from-yellow-400 to-amber-300 bg-clip-text text-transparent mb-4 md:mb-8">
@@ -1033,16 +799,27 @@ export default function App() {
             </StackingCards>
           </div>
         </section>
-        <section id="quote" className="bg-slate-950 py-24 md:py-32">
-          <div className="mx-auto max-w-5xl px-6 md:px-8">
-            <div className="text-center mb-16">
-              <h2 className="text-5xl font-black tracking-tight md:text-6xl bg-gradient-to-br from-yellow-400 to-amber-300 bg-clip-text text-transparent mb-6">
+        <section id="quote" className="bg-slate-950">
+          <LampContainer>
+            <motion.div
+              initial={{ opacity: 0.5, y: 100 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{
+                delay: 0.3,
+                duration: 0.8,
+                ease: "easeInOut",
+              }}
+              className="mt-8 text-center"
+            >
+              <h2 className="bg-gradient-to-br from-yellow-100 to-amber-500 py-4 bg-clip-text text-center text-4xl font-medium tracking-tight text-transparent md:text-6xl lg:text-7xl">
                 Let’s Build Your 3D Universe
               </h2>
-              <p className="text-xl text-gray-400 max-w-2xl mx-auto">
+              <p className="mt-4 text-base md:text-xl text-gray-400 max-w-2xl mx-auto pb-4">
                 Ready to create an experience that turns visitors into believers? Book an exploratory call and let's bring your vision to life.
               </p>
-            </div>
+            </motion.div>
+          </LampContainer>
+          <div className="mx-auto max-w-5xl px-6 md:px-8 pb-24 md:pb-32 mt-8 md:mt-16 relative z-50">
             <ContactCalendar />
           </div>
         </section>
@@ -1052,3 +829,4 @@ export default function App() {
     </div>
   )
 }
+
