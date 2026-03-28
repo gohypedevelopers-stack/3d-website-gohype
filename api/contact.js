@@ -42,6 +42,10 @@ module.exports = async function handler(req, res) {
     getHeader(req, 'x-booking-debug-request-id'),
   ])
 
+  if (isCalendarBooking) {
+    return proxyToContactRuntime(req, res, body, debugRequestId)
+  }
+
   if (!name.trim() || !email.trim()) {
     return res.status(400).json({ error: 'Name and email are required.' })
   }
@@ -445,7 +449,8 @@ function formatDateInTimeZone(date, timeZone, suffix) {
 function getHeader(req, name) {
   if (!req || !req.headers) return ''
   const value = req.headers[name]
-  return Array.isArray(value) ? value[0] || '' : value || ''
+  const normalized = Array.isArray(value) ? value[0] || '' : value || ''
+  return String(normalized).split(',')[0].trim()
 }
 
 function firstNonEmpty(values) {
@@ -462,4 +467,80 @@ function escapeHtml(input) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
+}
+
+async function proxyToContactRuntime(req, res, body, debugRequestId) {
+  const upstreamUrl = buildUpstreamUrl(req, '/api/contact-runtime')
+
+  if (!upstreamUrl) {
+    return res.status(500).json({
+      error: 'Could not resolve the booking runtime URL.',
+      debug: {
+        handler: 'legacy-api-contact-proxy',
+        debugRequestId,
+        upstreamPath: '/api/contact-runtime',
+      },
+    })
+  }
+
+  const headers = {
+    'Content-Type': 'application/json',
+  }
+
+  if (debugRequestId) {
+    headers['X-Booking-Debug-Request-Id'] = debugRequestId
+  }
+
+  for (const name of ['x-vercel-ip-timezone', 'cf-timezone', 'x-timezone']) {
+    const value = getHeader(req, name)
+    if (value) headers[name] = value
+  }
+
+  try {
+    console.log('contact: proxying calendar booking', {
+      debugRequestId,
+      upstreamUrl,
+    })
+
+    const upstreamResponse = await fetch(upstreamUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body || {}),
+    })
+
+    const text = await upstreamResponse.text()
+    const contentType = upstreamResponse.headers.get('content-type') || 'application/json; charset=utf-8'
+
+    console.log('contact: calendar booking proxy response', {
+      debugRequestId,
+      upstreamUrl,
+      status: upstreamResponse.status,
+    })
+
+    res.statusCode = upstreamResponse.status
+    res.setHeader('Content-Type', contentType)
+    return res.end(text)
+  } catch (error) {
+    console.error('contact: calendar booking proxy failed', error)
+    return res.status(500).json({
+      error: error?.message || 'Failed to reach the booking runtime.',
+      debug: {
+        handler: 'legacy-api-contact-proxy',
+        debugRequestId,
+        upstreamUrl,
+      },
+    })
+  }
+}
+
+function buildUpstreamUrl(req, pathname) {
+  const host = firstNonEmpty([getHeader(req, 'x-forwarded-host'), getHeader(req, 'host')])
+  if (!host) return ''
+
+  const proto = firstNonEmpty([
+    getHeader(req, 'x-forwarded-proto'),
+    host.includes('localhost') ? 'http' : 'https',
+  ])
+
+  return `${proto || 'https'}://${host}${pathname}`
 }
