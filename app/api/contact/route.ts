@@ -85,6 +85,7 @@ export async function POST(req: Request) {
     const finalMessage = firstNonEmpty([message, details]) || ''
     const meetingStart = extractMeetingDate(body)
     const normalizedRecipients = normalizeEmailList([DEFAULT_CONTACT_RECIPIENT, ...CONTACT_RECIPIENTS.split(',')])
+    const debugRequestId = firstNonEmpty([body?.debugRequestId, getHeader(req, 'x-booking-debug-request-id')])
 
     console.log('contact: request received', {
         name: String(name || '').trim(),
@@ -161,6 +162,14 @@ export async function POST(req: Request) {
                     return NextResponse.json(
                         {
                             error: formatCalendarBookingError(error),
+                            debug: {
+                                handler: 'app-api-contact',
+                                debugRequestId,
+                                source: leadFields.source || '',
+                                isCalendarBooking: true,
+                                calendarError: String(error?.message || '').trim(),
+                                googleCalendarEnabled: GOOGLE_CALENDAR_ENABLED,
+                            },
                         },
                         { status: 500 },
                     )
@@ -274,6 +283,15 @@ export async function POST(req: Request) {
                 indiaTime: timeContext.meetingIndiaTime || '',
                 requestReceivedIndiaTime: timeContext.requestReceivedIndiaTime,
                 requesterTimeZone: timeContext.requesterTimeZone,
+                debug: {
+                    handler: 'app-api-contact',
+                    debugRequestId,
+                    source: leadFields.source || '',
+                    isCalendarBooking: true,
+                    deliveryMode: bookingMode,
+                    hasMeetingUrl: Boolean(bookingLinks.meetingUrl),
+                    hasCalendarUrl: Boolean(bookingLinks.calendarUrl),
+                },
             },
             { status: 200 },
         )
@@ -324,6 +342,13 @@ export async function POST(req: Request) {
                 indiaTime: timeContext.meetingIndiaTime || '',
                 requestReceivedIndiaTime: timeContext.requestReceivedIndiaTime,
                 requesterTimeZone: timeContext.requesterTimeZone,
+                debug: {
+                    handler: 'app-api-contact',
+                    debugRequestId,
+                    source: leadFields.source || '',
+                    isCalendarBooking: false,
+                    deliveryMode: 'email',
+                },
             },
             { status: 200 },
         )

@@ -29,6 +29,8 @@ type BookingResponse = {
     indiaTime?: string
     requestReceivedIndiaTime?: string
     requesterTimeZone?: string
+    warning?: string
+    debug?: Record<string, any> | null
 }
 
 function getDaysInMonth(year: number, month: number) {
@@ -100,9 +102,15 @@ export default function ContactCalendar({ prefill }: Props) {
         setFormStatus({ submitting: true, submitted: false, error: "" })
 
         try {
+            const apiEndpoint = "/api/contact-booking"
+            const debugRequestId =
+                typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+                    ? crypto.randomUUID()
+                    : `booking-${Date.now()}`
             const payload: any = {
                 ...formData,
                 source: "calendar",
+                debugRequestId,
             }
 
             if (currentDate && selectedDate && selectedTime && year !== undefined && month !== undefined) {
@@ -116,6 +124,8 @@ export default function ContactCalendar({ prefill }: Props) {
             }
 
             console.log("contact-calendar: submit payload", {
+                apiEndpoint,
+                debugRequestId,
                 formData,
                 payload,
                 selectedDate,
@@ -124,9 +134,12 @@ export default function ContactCalendar({ prefill }: Props) {
                 currentYear: year,
             })
 
-            const res = await fetch("/api/contact-booking", {
+            const res = await fetch(apiEndpoint, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Booking-Debug-Request-Id": debugRequestId,
+                },
                 body: JSON.stringify(payload),
             })
 
@@ -150,20 +163,53 @@ export default function ContactCalendar({ prefill }: Props) {
             console.log("contact-calendar: api response", {
                 ok: res.ok,
                 status: res.status,
+                apiEndpoint,
+                debugRequestId,
                 requestEmail: payload.email,
                 requestName: payload.name,
                 data,
             })
 
+            console.log("contact-calendar: api diagnostics", {
+                apiEndpoint,
+                debugRequestId,
+                ok: res.ok,
+                status: res.status,
+                responseKeys: data && typeof data === "object" ? Object.keys(data) : [],
+                deliveryMode: data?.deliveryMode || "",
+                meetingUrl: data?.meetingUrl || "",
+                calendarUrl: data?.calendarUrl || "",
+                warning: data?.warning || "",
+                debug: data?.debug || null,
+            })
+
             if (!res.ok) {
                 console.error("contact-calendar: api error", {
                     status: res.status,
+                    apiEndpoint,
+                    debugRequestId,
                     requestEmail: payload.email,
                     requestName: payload.name,
                     payload,
                     data,
                 })
                 throw new Error(data?.error || `Failed to submit (${res.status})`)
+            }
+
+            if (!data?.meetingUrl && !data?.calendarUrl) {
+                console.error("contact-calendar: booking response missing links", {
+                    status: res.status,
+                    apiEndpoint,
+                    debugRequestId,
+                    requestEmail: payload.email,
+                    requestName: payload.name,
+                    payload,
+                    data,
+                })
+                throw new Error(
+                    data?.warning ||
+                        "Booking completed without a Google Meet link or calendar event. Check the production API handler and server logs.",
+                )
             }
 
             setBookingResponse({
@@ -178,14 +224,20 @@ export default function ContactCalendar({ prefill }: Props) {
                 indiaTime: data?.indiaTime || "",
                 requestReceivedIndiaTime: data?.requestReceivedIndiaTime || "",
                 requesterTimeZone: data?.requesterTimeZone || "",
+                warning: data?.warning || "",
+                debug: data?.debug || null,
             })
             console.log("contact-calendar: booking success", {
+                apiEndpoint,
+                debugRequestId,
                 requestEmail: payload.email,
                 requestName: payload.name,
                 calendarUrl: data?.calendarUrl || "",
                 meetingUrl: data?.meetingUrl || "",
                 inviteSent: Boolean(data?.inviteSent),
                 deliveryMode: data?.deliveryMode === "calendar" ? "calendar" : "email",
+                warning: data?.warning || "",
+                debug: data?.debug || null,
                 fullResponse: data,
             })
             setFormStatus({ submitting: false, submitted: true, error: "" })

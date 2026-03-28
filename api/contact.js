@@ -33,6 +33,14 @@ module.exports = async function handler(req, res) {
   } = body || {}
 
   const leadFields = normalizeLeadFields(body)
+  const meetingStart = extractMeetingDate(body)
+  const isCalendarBooking = Boolean(
+    meetingStart || leadFields.source === 'calendar' || leadFields.meetingLabel,
+  )
+  const debugRequestId = firstNonEmpty([
+    body?.debugRequestId,
+    getHeader(req, 'x-booking-debug-request-id'),
+  ])
 
   if (!name.trim() || !email.trim()) {
     return res.status(400).json({ error: 'Name and email are required.' })
@@ -99,9 +107,23 @@ module.exports = async function handler(req, res) {
 
     return res.status(200).json({
       success: true,
+      deliveryMode: 'email',
+      meetingUrl: '',
+      calendarUrl: '',
+      warning: isCalendarBooking
+        ? 'Legacy contact handler reached. This endpoint sends email only and does not generate Google Meet links.'
+        : '',
       indiaTime: timeContext.meetingIndiaTime || '',
       requestReceivedIndiaTime: timeContext.requestReceivedIndiaTime,
       requesterTimeZone: timeContext.requesterTimeZone,
+      debug: {
+        handler: 'legacy-api-contact',
+        debugRequestId,
+        source: leadFields.source || '',
+        isCalendarBooking,
+        hasMeetingStart: Boolean(meetingStart),
+        supportsDynamicMeet: false,
+      },
     })
   } catch (error) {
     console.error('contact: unexpected error', error)
