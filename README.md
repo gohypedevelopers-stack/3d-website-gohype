@@ -3,9 +3,13 @@
 ## Local preview
 
 1. Install Node 18+ (for the built-in `fetch` API the serverless functions rely on).
-2. Copy any required keys into `.env.local` (see `api/chat.js` and `api/contact.js` for the variables that are consumed).
-3. Run `npm install` once to pull the lightweight Express server dependencies.
-4. Start the preview server with `npm run dev` (or `npm start`) and visit <http://localhost:3000>.
+2. Copy `.env.example` to `.env.local`.
+3. Fill in the mail settings in `.env.local`.
+4. For Gmail, use `gohypedevelopers@gmail.com` as `SMTP_USER` and a Gmail App Password as `SMTP_PASS`.
+5. Fill in the Google Calendar OAuth values in `.env.local` to create a fresh Google Meet link for every booking.
+6. Set `CONTACT_RECIPIENTS=ravindranathjha76@gmail.com` if you want every team notification to reach that inbox.
+7. Run `npm install` once to pull the lightweight Express server dependencies.
+8. Start the preview server with `npm run dev` (or `npm start`) and visit <http://localhost:3000>.
 
 The server mirrors the `vercel.json` rewrites so requests to `/_next/static/*`, `/static/*`, `/logos/*`, `/videos/*`, and the API endpoints keep working against the production build artifacts.
 

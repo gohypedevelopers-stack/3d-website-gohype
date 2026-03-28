@@ -5,13 +5,14 @@ import nodemailer from 'nodemailer'
 
 export const runtime = 'nodejs'
 
-const SMTP_HOST = process.env.SMTP_HOST || ''
+const DEFAULT_CONTACT_RECIPIENT = 'ravindranathjha76@gmail.com'
+const SMTP_USER = process.env.SMTP_USER || ''
+const SMTP_HOST = process.env.SMTP_HOST || inferSmtpHost(SMTP_USER)
 const SMTP_PORT = parsePositiveInteger(process.env.SMTP_PORT, 465)
 const SMTP_SECURE = (process.env.SMTP_SECURE || 'true') === 'true'
-const SMTP_USER = process.env.SMTP_USER || ''
 const SMTP_PASS = process.env.SMTP_PASS || ''
-const SMTP_FROM_EMAIL = process.env.SMTP_FROM_EMAIL || ''
-const CONTACT_RECIPIENTS = process.env.CONTACT_RECIPIENTS || SMTP_USER
+const SMTP_FROM_EMAIL = process.env.SMTP_FROM_EMAIL || SMTP_USER
+const CONTACT_RECIPIENTS = process.env.CONTACT_RECIPIENTS || DEFAULT_CONTACT_RECIPIENT
 const GOOGLE_MEET_LINK = process.env.GOOGLE_MEET_LINK || ''
 const GOOGLE_CALENDAR_ENABLED = process.env.GOOGLE_CALENDAR_ENABLED === 'true'
 const GOOGLE_CALENDAR_CLIENT_ID = process.env.GOOGLE_CALENDAR_CLIENT_ID || ''
@@ -83,7 +84,7 @@ export async function POST(req: Request) {
     const leadFields = normalizeLeadFields(body)
     const finalMessage = firstNonEmpty([message, details]) || ''
     const meetingStart = extractMeetingDate(body)
-    const normalizedRecipients = normalizeEmailList(CONTACT_RECIPIENTS.split(','))
+    const normalizedRecipients = normalizeEmailList([DEFAULT_CONTACT_RECIPIENT, ...CONTACT_RECIPIENTS.split(',')])
 
     console.log('contact: request received', {
         name: String(name || '').trim(),
@@ -104,7 +105,10 @@ export async function POST(req: Request) {
 
     if (normalizedRecipients.length === 0) {
         console.error('contact: CONTACT_RECIPIENTS is misconfigured')
-        return NextResponse.json({ error: 'Email service is unavailable.' }, { status: 500 })
+        return NextResponse.json(
+            { error: `CONTACT_RECIPIENTS is missing. Add ${DEFAULT_CONTACT_RECIPIENT} or another valid recipient email.` },
+            { status: 500 },
+        )
     }
 
     const mailConfigError = getMailConfigError()
@@ -152,10 +156,20 @@ export async function POST(req: Request) {
             } catch (error: any) {
                 console.error('contact: calendar booking failed', serializeError(error))
 
+                const staticMeetLink = getValidatedGoogleMeetLink()
+                if (!staticMeetLink) {
+                    return NextResponse.json(
+                        {
+                            error: formatCalendarBookingError(error),
+                        },
+                        { status: 500 },
+                    )
+                }
+
                 bookingMode = 'email'
                 bookingLinks = {
                     eventId: '',
-                    meetingUrl: GOOGLE_MEET_LINK.trim(),
+                    meetingUrl: staticMeetLink,
                     calendarUrl: '',
                 }
             }
@@ -324,9 +338,9 @@ function hasMailProvider() {
 }
 
 function getMailConfigError() {
-    if (!SMTP_HOST) return 'SMTP_HOST is missing.'
     if (!SMTP_USER) return 'SMTP_USER is missing.'
-    if (!SMTP_PASS) return 'SMTP_PASS is missing.'
+    if (!SMTP_PASS) return 'SMTP_PASS is missing. For Gmail, use a 16-character App Password.'
+    if (!SMTP_HOST) return 'SMTP_HOST is missing. For Gmail, use smtp.gmail.com.'
     return ''
 }
 
@@ -382,6 +396,13 @@ function extractEmailAddress(value: string) {
     return match?.[1]?.trim() || value.trim()
 }
 
+function inferSmtpHost(user: string) {
+    const email = extractEmailAddress(user).toLowerCase()
+    if (!email) return ''
+    if (email.endsWith('@gmail.com') || email.endsWith('@googlemail.com')) return 'smtp.gmail.com'
+    return ''
+}
+
 function getValidatedGoogleMeetLink() {
     const trimmed = GOOGLE_MEET_LINK.trim()
     if (!trimmed) return ''
@@ -413,6 +434,17 @@ function serializeError(error: any) {
         rejected: error?.rejected || [],
         stack: error?.stack || '',
     }
+}
+
+function formatCalendarBookingError(error: any) {
+    const message = String(error?.message || '').trim()
+    const description = String(error?.response?.data?.error_description || '').trim()
+
+    if (message === 'invalid_grant' || description === 'Bad Request') {
+        return 'Google Calendar authorization failed. Regenerate GOOGLE_CALENDAR_REFRESH_TOKEN for the same Google account used by your OAuth client, then restart the server.'
+    }
+
+    return message || 'Google Calendar booking failed. Check your Google Calendar OAuth configuration and try again.'
 }
 
 async function createCalendarBooking({
@@ -906,9 +938,9 @@ function normalizeEmailList(values: string[]) {
     const unique = new Set<string>()
 
     for (const value of values) {
-        const trimmed = value.trim()
+        const trimmed = extractEmailAddress(value).trim().toLowerCase()
         if (!trimmed) continue
-        unique.add(trimmed.toLowerCase())
+        unique.add(trimmed)
     }
 
     return Array.from(unique)

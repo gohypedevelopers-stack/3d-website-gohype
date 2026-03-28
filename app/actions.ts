@@ -2,9 +2,16 @@
 
 import nodemailer from 'nodemailer';
 
-const GMAIL_USER = process.env.GMAIL_USER || '';
-const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
-const CONTACT_RECIPIENTS = (process.env.CONTACT_RECIPIENTS || GMAIL_USER).split(',').map((s) => s.trim()).filter(Boolean);
+const DEFAULT_CONTACT_RECIPIENT = 'ravindranathjha76@gmail.com';
+const SMTP_HOST = process.env.SMTP_HOST || '';
+const SMTP_PORT = Number(process.env.SMTP_PORT || 465);
+const SMTP_SECURE = (process.env.SMTP_SECURE || 'true') === 'true';
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
+const SMTP_FROM_EMAIL = process.env.SMTP_FROM_EMAIL || SMTP_USER;
+const CONTACT_RECIPIENTS = [DEFAULT_CONTACT_RECIPIENT, ...(process.env.CONTACT_RECIPIENTS || '').split(',')]
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 // Define the shape of our form data
 interface FormData {
@@ -22,22 +29,24 @@ export async function sendEmail(formData: FormData) {
     return { error: 'Name and Email are required fields.' };
   }
 
-  if (!GMAIL_USER || !GMAIL_APP_PASSWORD || CONTACT_RECIPIENTS.length === 0) {
-    console.error('Email service not configured: missing env vars');
+  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS || CONTACT_RECIPIENTS.length === 0) {
+    console.error('Email service not configured: missing SMTP env vars');
     return { error: 'Email service is not configured.' };
   }
 
   try {
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_SECURE,
       auth: {
-        user: GMAIL_USER,
-        pass: GMAIL_APP_PASSWORD,
+        user: SMTP_USER,
+        pass: SMTP_PASS,
       },
     });
 
     await transporter.sendMail({
-      from: `"GoHype Inquiry" <${GMAIL_USER}>`,
+      from: SMTP_FROM_EMAIL,
       to: CONTACT_RECIPIENTS,
       replyTo: email,
       subject: `New Quote Request from ${name}`,
