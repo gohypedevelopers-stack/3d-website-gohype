@@ -21,6 +21,11 @@ const GOOGLE_CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || 'primary'
 const GOOGLE_CALENDAR_ORGANIZER_EMAIL = process.env.GOOGLE_CALENDAR_ORGANIZER_EMAIL || SMTP_USER
 const BOOKING_DURATION_MINUTES = parsePositiveInteger(process.env.BOOKING_DURATION_MINUTES, 30)
 const INDIA_TIME_ZONE = 'Asia/Kolkata'
+const DEFAULT_SITE_ORIGIN = 'https://3d.gohypemedia.com'
+const BRAND_PHONE = '+91 8447788703'
+const BRAND_PHONE_LINK = '+918447788703'
+const BRAND_WEBSITE_URL = 'https://www.gohypemedia.com'
+const BRAND_WEBSITE_LABEL = 'www.gohypemedia.com'
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -498,8 +503,8 @@ async function sendTeamNotificationEmail(transporter, recipients, payload) {
     to: recipients,
     replyTo: payload.email,
     subject: `New GoHype booking from ${payload.name}`,
-    text: buildLeadText(payload),
-    html: buildLeadHtml(payload),
+    text: buildBookingTeamText(payload),
+    html: buildBookingTeamHtml(payload),
   })
 }
 
@@ -512,6 +517,255 @@ async function sendRequesterConfirmationEmail(transporter, payload) {
     text: buildRequesterConfirmationText(payload),
     html: buildRequesterConfirmationHtml(payload),
   })
+}
+
+function buildBookingTeamHtml(payload) {
+  return buildBookingEmailHtml(payload, 'team')
+}
+
+function buildBookingTeamText(payload) {
+  return buildBookingEmailText(payload, 'team')
+}
+
+function buildBookingEmailHtml(payload, variant) {
+  const greeting = variant === 'team' ? 'Hi Team,' : `Hi ${escapeHtml(payload.name)},`
+  const intro =
+    variant === 'team'
+      ? 'A new call has been scheduled with Go Hype Media.'
+      : 'Thank you for scheduling a call with us, we are excited to connect with you!'
+  const bullets =
+    variant === 'team'
+      ? [
+          "Understand the client's business goals",
+          'Discuss the current challenges in detail',
+          'Share how we can help with smart marketing and premium website solutions',
+        ]
+      : [
+          'Understand your business goals',
+          'Discuss your current challenges',
+          'Share how we can help you grow with smart marketing and premium website solutions',
+        ]
+  const platformLabel = resolveBookingPlatformLabel(payload.bookingLinks)
+  const detailRows = [
+    buildBookingDetailRow('Date', payload.timeContext.meetingDateLabel || payload.timeContext.meetingLocalTime || 'To be shared'),
+    buildBookingDetailRow('Time', payload.timeContext.meetingTimeLabel || payload.timeContext.meetingLocalTime || 'To be shared'),
+    buildBookingDetailRow('Platform', platformLabel),
+  ].join('')
+  const actions = [
+    payload.bookingLinks?.meetingUrl
+      ? `<a href="${escapeHtml(
+          payload.bookingLinks.meetingUrl,
+        )}" style="display:inline-block;padding:12px 20px;border-radius:999px;background:#111827;color:#ffffff;text-decoration:none;font-weight:700;">Join Call</a>`
+      : '',
+    payload.bookingLinks?.calendarUrl
+      ? `<a href="${escapeHtml(
+          payload.bookingLinks.calendarUrl,
+        )}" style="display:inline-block;padding:12px 20px;border-radius:999px;border:1px solid #111827;color:#111827;text-decoration:none;font-weight:700;margin-left:12px;">View Calendar Invite</a>`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('')
+  const extraHtml =
+    variant === 'team'
+      ? buildTeamRequesterDetailsHtml(payload)
+      : payload.message
+        ? buildOptionalNotesHtml({
+            heading: 'Anything specific to prepare?',
+            body: payload.message,
+          })
+        : ''
+  const logoUrl = buildBrandLogoUrl()
+
+  return `
+    <div style="margin:0;background:#f3f4f6;padding:32px 16px;font-family:Arial,sans-serif;color:#0f172a;">
+      <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:24px;overflow:hidden;">
+        <div style="background:linear-gradient(135deg,#000000 0%,#1f2937 100%);padding:28px 32px;text-align:center;">
+          <img src="${escapeHtml(
+            logoUrl,
+          )}" alt="Go Hype Media" style="display:block;margin:0 auto 18px;max-width:190px;width:100%;height:auto;" />
+          <p style="margin:0;color:#d1d5db;font-size:12px;letter-spacing:0.18em;text-transform:uppercase;">Go Hype Media</p>
+          <h1 style="margin:12px 0 0;font-size:28px;line-height:1.2;color:#ffffff;">
+            ${variant === 'team' ? 'New Call Scheduled' : 'Your Call Is Confirmed'}
+          </h1>
+        </div>
+        <div style="padding:32px;">
+          <p style="margin:0 0 16px;font-size:16px;line-height:1.7;">${greeting}</p>
+          <p style="margin:0 0 22px;font-size:16px;line-height:1.7;color:#334155;">${escapeHtml(intro)}</p>
+          <div style="margin:0 0 24px;padding:22px;border-radius:20px;background:#fafafa;border:1px solid #e5e7eb;">
+            <p style="margin:0 0 16px;font-size:18px;font-weight:700;color:#0f172a;">Here are your call details:</p>
+            <table style="width:100%;border-collapse:collapse;">
+              ${detailRows}
+            </table>
+          </div>
+          ${
+            actions
+              ? `<div style="margin:0 0 24px;">${actions}</div>`
+              : ''
+          }
+          <p style="margin:0 0 12px;font-size:16px;font-weight:700;color:#0f172a;">During this call, we will:</p>
+          <ul style="margin:0 0 24px;padding-left:20px;color:#334155;line-height:1.8;">
+            ${bullets.map((item) => `<li style="margin:0 0 8px;">${escapeHtml(item)}</li>`).join('')}
+          </ul>
+          ${extraHtml}
+          <p style="margin:0 0 16px;font-size:16px;line-height:1.7;color:#334155;">
+            ${
+              variant === 'team'
+                ? 'Please review the booking details and be ready to connect with the client at the scheduled time.'
+                : 'If there is anything specific you would like us to prepare beforehand, feel free to reply to this email.'
+            }
+          </p>
+          <p style="margin:0 0 24px;font-size:16px;line-height:1.7;color:#334155;">
+            ${variant === 'team' ? 'Looking forward to a productive conversation.' : 'Looking forward to speaking with you!'}
+          </p>
+          <div style="padding-top:20px;border-top:1px solid #e5e7eb;color:#334155;line-height:1.8;">
+            <p style="margin:0 0 8px;font-size:16px;">Warm regards,</p>
+            <p style="margin:0;font-size:16px;font-weight:700;color:#0f172a;">Team Go Hype Media</p>
+            <p style="margin:4px 0 0;"><a href="tel:${escapeHtml(BRAND_PHONE_LINK)}" style="color:#111827;text-decoration:none;">${escapeHtml(
+              BRAND_PHONE,
+            )}</a></p>
+            <p style="margin:4px 0 0;"><a href="${escapeHtml(
+              BRAND_WEBSITE_URL,
+            )}" style="color:#111827;text-decoration:none;">${escapeHtml(BRAND_WEBSITE_LABEL)}</a></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `
+}
+
+function buildBookingEmailText(payload, variant) {
+  const platformLabel = resolveBookingPlatformLabel(payload.bookingLinks)
+  const lines = [
+    variant === 'team' ? 'Hi Team,' : `Hi ${payload.name},`,
+    '',
+    variant === 'team'
+      ? 'A new call has been scheduled with Go Hype Media.'
+      : 'Thank you for scheduling a call with us, we are excited to connect with you!',
+    '',
+    'Here are your call details:',
+    `Date: ${payload.timeContext.meetingDateLabel || payload.timeContext.meetingLocalTime || 'To be shared'}`,
+    `Time: ${payload.timeContext.meetingTimeLabel || payload.timeContext.meetingLocalTime || 'To be shared'}`,
+    `Platform: ${platformLabel}`,
+    payload.bookingLinks?.meetingUrl ? `Call Link: ${payload.bookingLinks.meetingUrl}` : '',
+    payload.bookingLinks?.calendarUrl ? `Calendar Invite: ${payload.bookingLinks.calendarUrl}` : '',
+    '',
+    'During this call, we will:',
+    variant === 'team' ? "- Understand the client's business goals" : '- Understand your business goals',
+    variant === 'team' ? '- Discuss the current challenges in detail' : '- Discuss your current challenges',
+    variant === 'team'
+      ? '- Share how we can help with smart marketing and premium website solutions'
+      : '- Share how we can help you grow with smart marketing and premium website solutions',
+    '',
+  ]
+
+  if (variant === 'team') {
+    lines.push('Requester Details:')
+    lines.push(`Name: ${payload.name}`)
+    lines.push(`Email: ${payload.email}`)
+    if (payload.company) lines.push(`Company: ${payload.company}`)
+    if (payload.meetingType) lines.push(`Meeting Type: ${payload.meetingType}`)
+    if (payload.message) lines.push(`Notes: ${payload.message}`)
+    lines.push('')
+    lines.push('Please review the booking details and be ready to connect with the client at the scheduled time.')
+    lines.push('')
+    lines.push('Looking forward to a productive conversation.')
+  } else {
+    if (payload.message) {
+      lines.push(`Preparation Note: ${payload.message}`)
+      lines.push('')
+    }
+    lines.push('If there is anything specific you would like us to prepare beforehand, feel free to reply to this email.')
+    lines.push('')
+    lines.push('Looking forward to speaking with you!')
+  }
+
+  lines.push('')
+  lines.push('Warm regards,')
+  lines.push('Team Go Hype Media')
+  lines.push(BRAND_PHONE)
+  lines.push(BRAND_WEBSITE_LABEL)
+
+  return lines.filter(Boolean).join('\n')
+}
+
+function buildBookingDetailRow(label, value) {
+  return `<tr><td style="padding:8px 0;color:#475569;font-size:14px;width:108px;vertical-align:top;"><strong>${escapeHtml(
+    label,
+  )}:</strong></td><td style="padding:8px 0;color:#0f172a;font-size:15px;">${escapeHtml(value)}</td></tr>`
+}
+
+function buildOptionalNotesHtml({ heading, body }) {
+  return `
+    <div style="margin:0 0 24px;padding:18px 20px;border-radius:18px;background:#f8fafc;border:1px solid #e2e8f0;">
+      <p style="margin:0 0 8px;font-size:15px;font-weight:700;color:#0f172a;">${escapeHtml(heading)}</p>
+      <p style="margin:0;font-size:15px;line-height:1.7;color:#475569;">${escapeHtml(body)}</p>
+    </div>
+  `
+}
+
+function buildTeamRequesterDetailsHtml(payload) {
+  const detailItems = [
+    buildBookingDetailRow('Name', payload.name),
+    buildBookingDetailRow('Email', payload.email),
+    payload.company ? buildBookingDetailRow('Company', payload.company) : '',
+    payload.meetingType ? buildBookingDetailRow('Meeting Type', payload.meetingType) : '',
+    payload.message ? buildBookingDetailRow('Notes', payload.message) : '',
+  ]
+    .filter(Boolean)
+    .join('')
+
+  return `
+    <div style="margin:0 0 24px;padding:20px;border-radius:18px;background:#fafafa;border:1px solid #e5e7eb;">
+      <p style="margin:0 0 12px;font-size:16px;font-weight:700;color:#111827;">Requester details</p>
+      <table style="width:100%;border-collapse:collapse;">
+        ${detailItems}
+      </table>
+    </div>
+  `
+}
+
+function resolveBookingPlatformLabel(bookingLinks) {
+  if (bookingLinks?.meetingUrl) {
+    return bookingLinks.meetingUrl.includes('meet.google.com') ? 'Google Meet' : 'Call Link'
+  }
+
+  return bookingLinks?.calendarUrl ? 'Calendar Invite' : 'To be shared'
+}
+
+function buildBrandLogoUrl() {
+  return `${resolveConfiguredSiteOrigin()}/logo.png`
+}
+
+function resolveConfiguredSiteOrigin() {
+  const candidates = [
+    process.env.NEXT_PUBLIC_SITE_URL,
+    process.env.SITE_URL,
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.APP_URL,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL,
+    process.env.VERCEL_URL,
+    DEFAULT_SITE_ORIGIN,
+  ]
+
+  for (const candidate of candidates) {
+    const normalized = normalizeOrigin(candidate)
+    if (normalized) return normalized
+  }
+
+  return DEFAULT_SITE_ORIGIN
+}
+
+function normalizeOrigin(value) {
+  const trimmed = String(value || '').trim()
+  if (!trimmed) return ''
+
+  const candidate = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+
+  try {
+    return new URL(candidate).origin
+  } catch {
+    return ''
+  }
 }
 
 function buildLeadHtml({ name, email, company, message, source, meetingType, timeContext, bookingLinks }) {
@@ -570,82 +824,33 @@ function buildLeadText({ name, email, company, message, source, meetingType, tim
 }
 
 function buildRequesterConfirmationHtml({ name, company, message, meetingType, timeContext, bookingLinks }) {
-  const bookingDeliveryText = bookingLinks.calendarUrl
-    ? 'Thank you for scheduling with GoHype Media. Your meeting has been reserved and the calendar invitation has been prepared for you.'
-    : bookingLinks.meetingUrl
-      ? 'Thank you for scheduling with GoHype Media. Your meeting request has been received, and the session details are ready below.'
-      : 'Thank you for reaching out to GoHype Media. Our team has received your request and will review your requirements before confirming the meeting details with you shortly.'
-
-  const details = [
-    timeContext.meetingLocalTime ? `<li><strong>Your time:</strong> ${escapeHtml(timeContext.meetingLocalTime)}</li>` : '',
-    timeContext.meetingIndiaTime ? `<li><strong>India time:</strong> ${escapeHtml(timeContext.meetingIndiaTime)}</li>` : '',
-    meetingType ? `<li><strong>Meeting type:</strong> ${escapeHtml(meetingType)}</li>` : '',
-    company ? `<li><strong>Company:</strong> ${escapeHtml(company)}</li>` : '',
-    message ? `<li><strong>Notes:</strong> ${escapeHtml(message)}</li>` : '',
-  ]
-    .filter(Boolean)
-    .join('')
-
-  return `
-    <div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.7;color:#0f172a;">
-      <h2 style="margin:0 0 12px;">Thank you for contacting GoHype Media</h2>
-      <p style="margin:0 0 16px;">Hi ${escapeHtml(name)},</p>
-      <p style="margin:0 0 16px;">${escapeHtml(bookingDeliveryText)}</p>
-      <p style="margin:0 0 16px;">A member of our team will connect with you and guide you through the next steps. If your booking already includes a meeting link or calendar invite, you can use the details below to join at the scheduled time.</p>
-      <ul style="padding-left:18px;margin:0 0 20px;">
-        ${details}
-      </ul>
-      <p style="margin:0 0 16px;">
-        ${
-          bookingLinks.meetingUrl
-            ? `<a href="${escapeHtml(
-                bookingLinks.meetingUrl,
-              )}" style="display:inline-block;padding:12px 18px;background:#facc15;color:#111827;text-decoration:none;border-radius:999px;font-weight:700;margin-right:12px;">Open Google Meet</a>`
-            : ''
-        }
-        ${
-          bookingLinks.calendarUrl
-            ? `<a href="${escapeHtml(
-                bookingLinks.calendarUrl,
-              )}" style="display:inline-block;padding:12px 18px;background:#111827;color:#ffffff;text-decoration:none;border-radius:999px;font-weight:700;">Open Calendar Event</a>`
-            : ''
-        }
-      </p>
-      <p style="margin:0 0 8px;color:#475569;">If you need to update your availability or share anything before the call, simply reply to this email and our team will assist you.</p>
-      <p style="margin:0;color:#475569;">Regards,<br />GoHype Media Team</p>
-    </div>
-  `
+  return buildBookingEmailHtml(
+    {
+      name,
+      email: '',
+      company,
+      message,
+      meetingType,
+      timeContext,
+      bookingLinks,
+    },
+    'requester',
+  )
 }
 
 function buildRequesterConfirmationText({ name, company, message, meetingType, timeContext, bookingLinks }) {
-  const bookingDeliveryText = bookingLinks.calendarUrl
-    ? 'Thank you for scheduling with GoHype Media. Your meeting has been reserved and the calendar invitation has been prepared for you.'
-    : bookingLinks.meetingUrl
-      ? 'Thank you for scheduling with GoHype Media. Your meeting request has been received, and the session details are ready below.'
-      : 'Thank you for reaching out to GoHype Media. Our team has received your request and will review your requirements before confirming the meeting details with you shortly.'
-
-  const lines = [
-    `Hi ${name},`,
-    '',
-    bookingDeliveryText,
-    'A member of our team will connect with you and guide you through the next steps.',
-    '',
-    timeContext.meetingLocalTime ? `Your time: ${timeContext.meetingLocalTime}` : '',
-    timeContext.meetingIndiaTime ? `India time: ${timeContext.meetingIndiaTime}` : '',
-    meetingType ? `Meeting type: ${meetingType}` : '',
-    company ? `Company: ${company}` : '',
-    message ? `Notes: ${message}` : '',
-    '',
-    bookingLinks.meetingUrl ? `Google Meet: ${bookingLinks.meetingUrl}` : '',
-    bookingLinks.calendarUrl ? `Calendar Event: ${bookingLinks.calendarUrl}` : '',
-    '',
-    'If you need to update your availability or share anything before the call, reply to this email and our team will assist you.',
-    '',
-    'Regards,',
-    'GoHype Media Team',
-  ].filter(Boolean)
-
-  return lines.join('\n')
+  return buildBookingEmailText(
+    {
+      name,
+      email: '',
+      company,
+      message,
+      meetingType,
+      timeContext,
+      bookingLinks,
+    },
+    'requester',
+  )
 }
 
 function buildTimeContext(body, req, fallbackMeetingLabel = '') {
@@ -667,6 +872,8 @@ function buildTimeContext(body, req, fallbackMeetingLabel = '') {
       : meetingLabel,
     meetingIndiaTime: meetingDate ? formatDateInTimeZone(meetingDate, INDIA_TIME_ZONE, 'IST') : '',
     requestReceivedIndiaTime: formatDateInTimeZone(new Date(), INDIA_TIME_ZONE, 'IST'),
+    meetingDateLabel: meetingDate ? formatDateOnlyInTimeZone(meetingDate, requesterTimeZone) : '',
+    meetingTimeLabel: meetingDate ? formatTimeOnlyInTimeZone(meetingDate, requesterTimeZone) : '',
   }
 }
 
@@ -814,6 +1021,35 @@ function formatDateInTimeZone(date, timeZone, suffix) {
 
     const formatted = formatter.format(date)
     return suffix ? `${formatted} ${suffix}` : formatted
+  } catch {
+    return ''
+  }
+}
+
+function formatDateOnlyInTimeZone(date, timeZone) {
+  try {
+    return new Intl.DateTimeFormat('en-IN', {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      timeZone,
+    }).format(date)
+  } catch {
+    return ''
+  }
+}
+
+function formatTimeOnlyInTimeZone(date, timeZone) {
+  try {
+    const formattedTime = new Intl.DateTimeFormat('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone,
+    }).format(date)
+
+    return timeZone ? `${formattedTime} (${timeZone})` : formattedTime
   } catch {
     return ''
   }
