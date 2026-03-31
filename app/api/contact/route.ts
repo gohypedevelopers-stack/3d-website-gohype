@@ -69,6 +69,7 @@ type BookingRequest = {
 type MailProvider = {
     send: (options: {
         to: string | string[]
+        cc?: string | string[]
         subject: string
         text: string
         html: string
@@ -237,17 +238,20 @@ export async function POST(req: Request) {
             timeContext,
             bookingLinks,
         }
+        const teamNotificationEnvelope = getInternalNotificationEnvelope(normalizedRecipients)
 
         try {
             console.log('contact: sending team notification', {
-                to: normalizedRecipients,
+                to: teamNotificationEnvelope.to,
+                cc: teamNotificationEnvelope.cc,
                 subject: `New GoHype booking from ${name.trim()}`,
             })
             await sendTeamNotificationEmail(mailProvider, normalizedRecipients, {
                 ...teamEmail,
             })
             console.log('contact: team notification sent', {
-                to: normalizedRecipients,
+                to: teamNotificationEnvelope.to,
+                cc: teamNotificationEnvelope.cc,
             })
 
             console.log('contact: sending client confirmation', {
@@ -325,22 +329,26 @@ export async function POST(req: Request) {
         timeContext,
         bookingLinks: null,
     })
+    const internalNotificationEnvelope = getInternalNotificationEnvelope(normalizedRecipients)
 
     try {
         console.log('contact: sending website inquiry', {
-            to: normalizedRecipients,
+            to: internalNotificationEnvelope.to,
+            cc: internalNotificationEnvelope.cc,
             subject: `New GoHype inquiry from ${name.trim()}`,
         })
         await mailProvider.send({
             from: defaultFromAddress('GoHype Inquiry'),
-            to: normalizedRecipients,
+            to: internalNotificationEnvelope.to,
+            cc: internalNotificationEnvelope.cc,
             replyTo: email.trim(),
             subject: `New GoHype inquiry from ${name.trim()}`,
             text,
             html,
         })
         console.log('contact: website inquiry sent', {
-            to: normalizedRecipients,
+            to: internalNotificationEnvelope.to,
+            cc: internalNotificationEnvelope.cc,
         })
 
         return NextResponse.json(
@@ -388,10 +396,11 @@ function createMailProvider(): MailProvider {
     })
 
     return {
-        async send({ to, subject, text, html, replyTo, from }) {
+        async send({ to, cc, subject, text, html, replyTo, from }) {
             console.log('contact: smtp send start', {
                 from: from || defaultFromAddress('GoHype Media'),
                 to,
+                cc: cc || '',
                 replyTo: replyTo || '',
                 subject,
             })
@@ -399,6 +408,7 @@ function createMailProvider(): MailProvider {
             const info = await transporter.sendMail({
                 from: from || defaultFromAddress('GoHype Media'),
                 to,
+                cc,
                 replyTo,
                 subject,
                 text,
@@ -408,6 +418,7 @@ function createMailProvider(): MailProvider {
             console.log('contact: smtp send success', {
                 from: from || defaultFromAddress('GoHype Media'),
                 to,
+                cc: cc || '',
                 subject,
                 messageId: info.messageId,
                 accepted: info.accepted,
@@ -421,6 +432,18 @@ function createMailProvider(): MailProvider {
 function defaultFromAddress(label: string) {
     const email = extractEmailAddress(SMTP_FROM_EMAIL || SMTP_USER)
     return `${label} <${email}>`
+}
+
+function getInternalNotificationEnvelope(recipients: string[]) {
+    const to = extractEmailAddress(SMTP_FROM_EMAIL || SMTP_USER || DEFAULT_CONTACT_RECIPIENT)
+        .trim()
+        .toLowerCase()
+    const cc = normalizeEmailList(recipients).filter((value) => value !== to)
+
+    return {
+        to: to || DEFAULT_CONTACT_RECIPIENT,
+        cc,
+    }
 }
 
 function extractEmailAddress(value: string) {
@@ -489,7 +512,7 @@ async function createCalendarBooking({
     meetingEnd,
 }: BookingRequest): Promise<BookingLinks> {
     const calendar = createGoogleCalendarClient()
-    const attendees = normalizeEmailList([email, ...recipients]).map((value) => ({ email: value }))
+    const attendees = normalizeEmailList([email]).map((value) => ({ email: value }))
 
     const insertedEvent = await calendar.events.insert({
         calendarId: GOOGLE_CALENDAR_ID,
@@ -573,9 +596,12 @@ async function sendTeamNotificationEmail(
     recipients: string[],
     payload: EmailPayload,
 ) {
+    const envelope = getInternalNotificationEnvelope(recipients)
+
     await mailProvider.send({
         from: defaultFromAddress('GoHype Inquiry'),
-        to: recipients,
+        to: envelope.to,
+        cc: envelope.cc,
         replyTo: payload.email,
         subject: `New GoHype booking from ${payload.name}`,
         text: buildBookingTeamText(payload),

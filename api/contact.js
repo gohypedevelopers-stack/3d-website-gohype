@@ -194,10 +194,12 @@ module.exports = async function handler(req, res) {
       timeContext,
       bookingLinks,
     }
+    const teamNotificationEnvelope = getInternalNotificationEnvelope(normalizedRecipients)
 
     try {
       console.log('contact: sending team notification', {
-        to: normalizedRecipients,
+        to: teamNotificationEnvelope.to,
+        cc: teamNotificationEnvelope.cc,
         subject: `New GoHype booking from ${name.trim()}`,
         handler: 'legacy-api-contact',
         debugRequestId,
@@ -206,7 +208,8 @@ module.exports = async function handler(req, res) {
       await sendTeamNotificationEmail(transporter, normalizedRecipients, teamEmail)
 
       console.log('contact: team notification sent', {
-        to: normalizedRecipients,
+        to: teamNotificationEnvelope.to,
+        cc: teamNotificationEnvelope.cc,
       })
 
       console.log('contact: sending client confirmation', {
@@ -281,16 +284,19 @@ module.exports = async function handler(req, res) {
     timeContext,
     bookingLinks: null,
   })
+  const internalNotificationEnvelope = getInternalNotificationEnvelope(normalizedRecipients)
 
   try {
     console.log('contact: sending website inquiry', {
-      to: normalizedRecipients,
+      to: internalNotificationEnvelope.to,
+      cc: internalNotificationEnvelope.cc,
       subject: `New GoHype inquiry from ${name.trim()}`,
     })
 
     await transporter.sendMail({
       from: defaultFromAddress('GoHype Inquiry'),
-      to: normalizedRecipients,
+      to: internalNotificationEnvelope.to,
+      cc: internalNotificationEnvelope.cc,
       replyTo: email.trim(),
       subject: `New GoHype inquiry from ${name.trim()}`,
       text,
@@ -298,7 +304,8 @@ module.exports = async function handler(req, res) {
     })
 
     console.log('contact: website inquiry sent', {
-      to: normalizedRecipients,
+      to: internalNotificationEnvelope.to,
+      cc: internalNotificationEnvelope.cc,
     })
 
     return res.status(200).json({
@@ -360,6 +367,18 @@ function defaultFromAddress(label) {
   return `${label} <${email}>`
 }
 
+function getInternalNotificationEnvelope(recipients) {
+  const to = extractEmailAddress(SMTP_FROM_EMAIL || SMTP_USER || DEFAULT_CONTACT_RECIPIENT)
+    .trim()
+    .toLowerCase()
+  const cc = normalizeEmailList(recipients).filter((value) => value !== to)
+
+  return {
+    to: to || DEFAULT_CONTACT_RECIPIENT,
+    cc,
+  }
+}
+
 function extractEmailAddress(value) {
   const match = /<([^>]+)>/.exec(value)
   return match?.[1]?.trim() || String(value || '').trim()
@@ -418,7 +437,7 @@ function formatCalendarBookingError(error) {
 
 async function createCalendarBooking({ name, email, company, message, recipients, meetingStart, meetingEnd }) {
   const calendar = createGoogleCalendarClient()
-  const attendees = normalizeEmailList([email, ...recipients]).map((value) => ({ email: value }))
+  const attendees = normalizeEmailList([email]).map((value) => ({ email: value }))
 
   const insertedEvent = await calendar.events.insert({
     calendarId: GOOGLE_CALENDAR_ID,
@@ -498,9 +517,12 @@ async function waitForConferenceLink(calendar, initialEvent) {
 }
 
 async function sendTeamNotificationEmail(transporter, recipients, payload) {
+  const envelope = getInternalNotificationEnvelope(recipients)
+
   await transporter.sendMail({
     from: defaultFromAddress('GoHype Inquiry'),
-    to: recipients,
+    to: envelope.to,
+    cc: envelope.cc,
     replyTo: payload.email,
     subject: `New GoHype booking from ${payload.name}`,
     text: buildBookingTeamText(payload),
